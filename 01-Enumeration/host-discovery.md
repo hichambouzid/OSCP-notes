@@ -74,7 +74,7 @@ These hosts responded to Nmap's discovery methods; silent hosts may still be run
 Extract responding addresses from the grepable output:
 
 ```bash
-awk '/Up$/{print $2}' scans/host-discovery.gnmap > live-hosts.txt
+awk '/^Host: / && /Status: Up/{print $2}' scans/host-discovery.gnmap > live-hosts.txt
 cat live-hosts.txt
 ```
 
@@ -113,7 +113,7 @@ sudo nmap -sn -PU53,161 "$IP"
 To enumerate UDP ports rather than discover hosts:
 
 ```bash
-sudo nmap -sU -p 53,69,123,161 "$IP"
+sudo nmap -Pn -sU -p 53,69,123,161 "$IP"
 ```
 
 ## 6. ARP discovery (local Layer 2 only)
@@ -132,7 +132,7 @@ When the exam or lab explicitly assigns a target IP, you can proceed to port sca
 
 ```bash
 sudo nmap -Pn -p 22,80,443,445 "$IP"
-sudo nmap -Pn -p- --min-rate 1000 -oA scans/tcp-all "$IP"
+sudo nmap -Pn -sS -p- --min-rate 1000 -oA scans/tcp-all "$IP"
 ```
 
 `-Pn` skips host discovery; it **does not** confirm that the host is alive. `-p-` scans all 65,535 TCP ports. Aggressive packet rates can lose results on unstable links; reduce speed and rescan if necessary.
