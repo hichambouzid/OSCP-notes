@@ -221,3 +221,67 @@ Evidence: scans/tcp-all.nmap
 ---
 
 **Next:** [Nmap Enumeration](./nmap.md)
+
+## 11. UDP port scanning — follow-up after host discovery
+
+**Important:** The full TCP scan (`-sS -p-`) does **not** include UDP. Run UDP scans separately on assigned targets. The earlier `-sn -PU` command is for **host discovery**, not UDP port enumeration.
+
+### Step 1 — Scan the top 100 UDP ports
+
+```bash
+sudo nmap -Pn -sU --top-ports 100 -oA scans/udp-top100 "$IP"
+```
+
+This is a practical starting point because UDP scans can take considerably longer than TCP scans.
+
+### Step 2 — Expand if necessary
+
+```bash
+sudo nmap -Pn -sU --top-ports 1000 -oA scans/udp-top1000 "$IP"
+```
+
+For a comprehensive UDP scan when time and lab scope permit:
+
+```bash
+sudo nmap -Pn -sU -p- -oA scans/udp-all "$IP"
+```
+
+### Step 3 — Identify interesting UDP services
+
+Replace the example ports with those identified in your results:
+
+```bash
+sudo nmap -Pn -sU -sV -p 53,69,123,161 -oA scans/udp-services "$IP"
+```
+
+Common services include DNS (53), TFTP (69), NTP (123), and SNMP (161). Services can run on nonstandard ports.
+
+### Step 4 — Run relevant, reviewed NSE scripts
+
+For an authorized SNMP service on UDP/161:
+
+```bash
+nmap --script-help snmp-info
+sudo nmap -Pn -sU -p 161 --script snmp-info -oA scans/snmp-check "$IP"
+```
+
+Read script help first; use scripts relevant to the actual service and lab authorization. A script finding requires manual validation before being treated as a confirmed vulnerability.
+
+### Interpret UDP scan results
+
+| State | Meaning |
+| --- | --- |
+| `open` | Nmap received evidence that a UDP service is listening |
+| `closed` | An ICMP port-unreachable response indicates the port is closed |
+| `filtered` | Filtering prevents a determination |
+| `open|filtered` | No definitive response; the port might be open or filtered |
+
+**OSCP reminder:** Don't mark `open|filtered` as confirmed open. Try service-specific probes or `-sV` to gather more evidence.
+
+### UDP checklist
+
+- [ ] Run a top-100 UDP scan after the TCP scan.
+- [ ] Investigate promising UDP ports with `-sV`.
+- [ ] Use service-specific NSE scripts only after reviewing them.
+- [ ] Expand to more UDP ports if the target and available time justify it.
+- [ ] Save all scan outputs and document inconclusive results.
