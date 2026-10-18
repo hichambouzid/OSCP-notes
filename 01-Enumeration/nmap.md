@@ -65,7 +65,7 @@ PY
 echo "Open TCP ports: $PORTS"
 ```
 
-If the variable is empty, check the target IP, routing, VPN, scan results, and packet loss before proceeding.
+If the variable is empty, check the target IP, routing, VPN, scan results, and packet loss before proceeding. Do **not** run the next command with an empty `PORTS` variable.
 
 ## Step 2 — Scan UDP ports separately
 
@@ -94,7 +94,11 @@ UDP scans can be much slower than TCP scans. `open|filtered` means Nmap cannot d
 Use the ports discovered in Step 1:
 
 ```bash
-sudo nmap -Pn -sC -sV -p "$PORTS" -oA scans/tcp-services "$IP"
+if [ -n "$PORTS" ]; then
+  sudo nmap -Pn -sC -sV -p "$PORTS" -oA scans/tcp-services "$IP"
+else
+  echo 'No confirmed open TCP ports; review scan results first.'
+fi
 ```
 
 - `-sC`: run Nmap's default NSE scripts.
@@ -246,4 +250,5 @@ For every suspected issue, record the affected port, product/version, prerequisi
 
 ---
 
-**Previous:** [Host Discovery](./host-discovery.md)
+**Previous:** [Host Discovery](./host-discovery.md)  
+**Next:** [Service-Specific Enumeration](./service-enumeration.md)
