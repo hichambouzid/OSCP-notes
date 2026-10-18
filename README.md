@@ -11,6 +11,7 @@ Hands-on notes for **authorized OSCP labs and penetration testing practice**. Co
 ## Web application testing
 
 4. **[Web Application Enumeration](02-Web-Application/web-enumeration.md)** — Fingerprint web apps, discover content and virtual hosts, inspect authentication and APIs, and triage possible vulnerabilities.
+5. **[Web Vulnerability Testing](02-Web-Application/web-vulnerability-testing.md)** — Validate SQLi, XSS, traversal/LFI, file uploads, authentication, access control, command injection and SSTI using controlled lab tests.
 
 ## Quick start
 
