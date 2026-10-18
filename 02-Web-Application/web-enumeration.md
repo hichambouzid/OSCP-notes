@@ -93,13 +93,26 @@ curl -i "http://app.example.lab/"
 
 Replace `app.example.lab` with a hostname grounded in your lab. Do not invent or scan unrelated domains.
 
-For authorized virtual-host discovery, test the `Host` header against the assigned IP. For example, with ffuf and an approved subdomain wordlist:
+For authorized virtual-host discovery, test the `Host` header against the assigned IP. Kali commonly has SecLists at `/usr/share/seclists/` **if the `seclists` package is installed**. Check the actual path first:
 
 ```bash
-ffuf -w /path/to/authorized-wordlist.txt -u "http://$IP/" -H "Host: FUZZ.example.lab" -rate 20 -of json -o scans/web/vhosts.json
+ls /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt
 ```
 
-Replace the wordlist and base domain. **Filter by response size/words only after measuring the default response**, since many applications return identical pages for unknown hosts.
+If the file is missing, install SecLists from Kali's package repositories:
+
+```bash
+sudo apt update
+sudo apt install seclists
+```
+
+Then, for an assigned domain such as `example.lab`, run:
+
+```bash
+ffuf -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -u "http://$IP/" -H "Host: FUZZ.example.lab" -rate 20 -of json -o scans/web/vhosts.json
+```
+
+Replace `example.lab` with the **actual in-scope base domain** and adjust the URL scheme/port to the discovered service. If `ffuf` is missing, install it with `sudo apt install ffuf`. **Compare a random nonexistent Host header first** and filter by response size/words only after measuring the default response; some servers serve identical pages for unknown hosts.
 
 ## 5. Inspect HTTP methods and TLS
 
