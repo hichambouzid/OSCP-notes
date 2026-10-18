@@ -64,6 +64,32 @@ The cipher enumeration script makes multiple handshakes; run only when permitted
 
 **Next:** [Web Application notes](../02-Web-Application/) when that section is available.
 
+### Practical web access, browsing and downloads
+
+If Nmap reports HTTP or HTTPS, visit the actual open port:
+
+```bash
+curl -i "http://$IP:80/"
+curl -k -i "https://$IP:443/"
+```
+
+In a browser, open `http://TARGET_IP:PORT/` and follow visible links. For a named virtual host provided by the lab, add the assigned hostname to `/etc/hosts` and browse by name rather than IP.
+
+To inspect an HTTP response and download a publicly accessible file:
+
+```bash
+curl -I "http://$IP:80/"
+curl -o evidence/web-page.html "http://$IP:80/"
+curl -O "http://$IP:80/readme.txt"
+file evidence/web-page.html
+less evidence/web-page.html
+```
+
+`curl -O` saves using the remote basename in the current directory. Replace `readme.txt` with a file actually discovered; do not assume it exists. `-I` requests headers and may be unsupported by some servers.
+
+For paths discovered with Gobuster, request them individually and distinguish `200` (response), `301/302` (redirect), `401` (authentication required), `403` (forbidden), and `404` (not found). A `200` alone does not prove sensitive data exposure.
+
+
 ## 2. SMB — Windows file sharing (139/445)
 
 ### Identify configuration and shares
@@ -91,6 +117,47 @@ Look for:
 - Usernames or group names revealed through authorized access
 
 **Interpretation:** A listed share does not automatically mean its contents are readable. Test permissions explicitly and record what succeeded.
+
+### Practical SMB share access and downloads
+
+List shares without supplying a password (only works if anonymous/guest access is allowed):
+
+```bash
+smbclient -L "//$IP/" -N
+```
+
+Connect to a share returned by the listing:
+
+```bash
+mkdir -p evidence/smb
+smbclient "//$IP/SHARE" -N
+```
+
+Inside the `smbclient` prompt:
+
+```text
+smb: \\> pwd
+smb: \\> ls
+smb: \\> cd documents
+smb: \\> ls
+smb: \\> lcd evidence/smb
+smb: \\> get readme.txt
+smb: \\> exit
+```
+
+Replace `SHARE`, `documents`, and `readme.txt` with names actually returned. `lcd` changes the local download directory. The `get` command downloads a readable file; listing a share does not prove file access.
+
+Inspect locally:
+
+```bash
+file evidence/smb/readme.txt
+less evidence/smb/readme.txt
+```
+
+For a lab-provided account, use `smbclient "//$IP/SHARE" -U USERNAME` and enter the password interactively rather than exposing it on the command line.
+
+**If access fails:** `NT_STATUS_ACCESS_DENIED` indicates insufficient permission; `NT_STATUS_BAD_NETWORK_NAME` often means an incorrect share name. Record the outcome instead of assuming anonymous access works.
+
 
 ## 3. FTP — File Transfer Protocol (21)
 
@@ -220,6 +287,42 @@ Look for the SSH product/version, host keys, supported algorithms and authentica
 
 **Next:** Use legitimate credentials discovered during authorized lab work; do not assume SSH is exploitable because it is exposed.
 
+### Practical SSH login and remote file inspection
+
+SSH normally requires **authorized credentials or a valid key**; it does not provide anonymous file browsing.
+
+```bash
+ssh -p 22 USERNAME@"$IP"
+```
+
+Once logged in with approved credentials:
+
+```bash
+pwd
+whoami
+ls -lah
+find . -maxdepth 2 -type f -readable 2>/dev/null
+file ./notes.txt
+less ./notes.txt
+exit
+```
+
+To copy a file that the account is allowed to read, from **your Kali terminal**:
+
+```bash
+mkdir -p evidence/ssh
+scp -P 22 USERNAME@"$IP":/home/USERNAME/notes.txt evidence/ssh/
+```
+
+Replace usernames, paths and ports with actual values. `scp -P` uses an uppercase P for port. If the host only supports SFTP:
+
+```bash
+sftp -P 22 USERNAME@"$IP"
+```
+
+Then use `pwd`, `ls`, `cd`, `lcd evidence/ssh`, `get notes.txt`, and `bye`. Do not download private material outside the lab scope.
+
+
 ## 5. DNS — Domain Name System (53 TCP/UDP)
 
 ```bash
@@ -239,6 +342,27 @@ dig @"$IP" example.lab AXFR
 
 A refused zone transfer is normal and does not mean DNS is misconfigured.
 
+### Practical DNS enumeration and output collection
+
+DNS does **not** offer general filesystem access. It exposes records, not remote files.
+
+```bash
+export DOMAIN=example.lab  # Replace with the assigned domain
+dig @"$IP" "$DOMAIN" A +noall +answer
+dig @"$IP" "$DOMAIN" NS +noall +answer
+dig @"$IP" "$DOMAIN" MX +noall +answer
+dig @"$IP" "$DOMAIN" TXT +noall +answer
+dig @"$IP" "$DOMAIN" AXFR > scans/dns-axfr.txt
+```
+
+A zone transfer only succeeds if the server allows it for your client; a failure is normal. If permitted and successful, review `scans/dns-axfr.txt` for in-scope hostnames and resolve them individually. You are saving DNS responses locally, **not downloading files from the DNS server**.
+
+```bash
+cat scans/dns-axfr.txt
+dig @"$IP" www."$DOMAIN" A +short
+```
+
+
 ## 6. SNMP — Network management (161/UDP)
 
 ```bash
@@ -257,6 +381,21 @@ Replace `COMMUNITY` with the authorized value. Look for system descriptions, hos
 
 **UDP reminder:** `open|filtered` is inconclusive, not proof of an open service.
 
+### Practical SNMP access and evidence collection
+
+SNMP exposes management objects rather than remote files. For SNMPv2c, use a community string **supplied or explicitly permitted by the lab**:
+
+```bash
+snmpget -v2c -c COMMUNITY "$IP" 1.3.6.1.2.1.1.1.0
+snmpwalk -v2c -c COMMUNITY "$IP" 1.3.6.1.2.1.1 > scans/snmp-system.txt
+cat scans/snmp-system.txt
+```
+
+The first OID requests the system description; the second walks the system information subtree. Replace `COMMUNITY` with the authorized value. A timeout can indicate a wrong community, filtering, version mismatch or no response; it is not proof the port is closed.
+
+Record hostnames, system details and interface clues. Avoid write operations (`snmpset`) during enumeration.
+
+
 ## 7. SMTP — Mail service (25/465/587)
 
 ```bash
@@ -264,6 +403,54 @@ sudo nmap -Pn -sV -p 25,465,587 --script smtp-commands -oA scans/smtp-info "$IP"
 ```
 
 Review supported SMTP commands, TLS options, banner information and mail domain configuration. Do not send unsolicited mail or perform large-scale address guessing.
+
+### Practical SMTP enumeration — commands and interpretation
+
+SMTP is a **mail transport protocol**, not a remote file browser. You can inspect the server's greeting and supported commands without sending a message.
+
+First identify which SMTP ports are actually open:
+
+```bash
+sudo nmap -Pn -sV -p 25,465,587 --script smtp-commands -oA scans/smtp-info "$IP"
+```
+
+**Plain SMTP on port 25** (when permitted):
+
+```bash
+nc -nv "$IP" 25
+```
+
+At the SMTP prompt, enter:
+
+```text
+EHLO kali.lab
+QUIT
+```
+
+Typical responses include `220` (service greeting), `250` (command accepted / advertised capabilities), `500/502` (unknown or unsupported command), and `530` (authentication required).
+
+**STARTTLS on port 587**, if advertised:
+
+```bash
+openssl s_client -starttls smtp -connect "$IP:587" -crlf
+```
+
+After the TLS handshake, type `EHLO kali.lab` and then `QUIT`. For implicit TLS on port 465:
+
+```bash
+openssl s_client -connect "$IP:465" -crlf
+```
+
+Inspect the certificate, hostname, server greeting, `EHLO` extensions, and whether STARTTLS and AUTH are advertised. `AUTH` being advertised does not mean anonymous login is possible.
+
+To save a non-authenticating SMTP capability check:
+
+```bash
+printf 'EHLO kali.lab\r\nQUIT\r\n' | nc -w 5 "$IP" 25 | tee scans/smtp-ehlo.txt
+```
+
+**Do not** attempt open-relay testing by delivering mail to third parties, bulk recipient guessing, or unsolicited messages. SMTP generally does not let you list mailboxes or download emails. Mailbox access uses separate protocols such as POP3 or IMAP with authorized credentials.
+
 
 ## 8. NFS — Network File System (111/2049)
 
@@ -274,6 +461,35 @@ showmount -e "$IP"
 
 Check exports and client restrictions. Do not assume that an exported path is accessible or writable; verify with authorized, non-destructive checks.
 
+### Practical NFS access and read-only file inspection
+
+Enumerate exported paths:
+
+```bash
+showmount -e "$IP"
+```
+
+If the server exports an authorized path and your client is permitted, mount it **read-only** to avoid modifying remote files:
+
+```bash
+sudo mkdir -p /mnt/oscp-nfs
+sudo mount -t nfs -o ro "$IP:/export/share" /mnt/oscp-nfs
+ls -lah /mnt/oscp-nfs
+find /mnt/oscp-nfs -maxdepth 2 -type f 2>/dev/null
+```
+
+Replace `/export/share` with a real exported path. Copy an authorized readable file locally and unmount afterward:
+
+```bash
+mkdir -p evidence/nfs
+cp /mnt/oscp-nfs/readme.txt evidence/nfs/
+file evidence/nfs/readme.txt
+sudo umount /mnt/oscp-nfs
+```
+
+Export listing does not guarantee access: server restrictions, protocol versions and filesystem permissions still apply.
+
+
 ## 9. RDP — Remote Desktop (3389)
 
 ```bash
@@ -282,6 +498,19 @@ sudo nmap -Pn -sV -p 3389 --script rdp-ntlm-info,rdp-enum-encryption -oA scans/r
 
 Review hostname/domain clues, supported security layers and certificate details. Do not attempt authentication without approved credentials or scope.
 
+### Practical RDP connection
+
+RDP is a graphical remote-desktop protocol, not an anonymous file-listing interface. With credentials explicitly supplied or authorized for the lab, connect using a client installed on Kali:
+
+```bash
+xfreerdp /v:"$IP" /u:USERNAME
+```
+
+Enter the password securely when prompted; client syntax varies by installed FreeRDP version. Inspect only resources your account is authorized to access. If FreeRDP is unavailable, check `xfreerdp /help` or your installed RDP client's documentation.
+
+Do not assume an open RDP port grants access or that file transfer is enabled.
+
+
 ## 10. Databases — MySQL, PostgreSQL, MSSQL
 
 ```bash
@@ -289,6 +518,42 @@ sudo nmap -Pn -sV -p 1433,3306,5432 "$IP"
 ```
 
 Use only ports that are actually open. Note product, version, whether remote access is exposed, and any authentication requirements. Avoid destructive queries; do not assume default credentials.
+
+### Practical database connection and safe read-only checks
+
+A database port does not grant anonymous access. Use credentials explicitly supplied for the authorized lab and **avoid modifying data**.
+
+**MySQL/MariaDB (usually 3306):**
+
+```bash
+mysql -h "$IP" -P 3306 -u USERNAME -p
+```
+
+After authentication:
+
+```sql
+SHOW DATABASES;
+SELECT VERSION();
+```
+
+**PostgreSQL (usually 5432):**
+
+```bash
+psql -h "$IP" -p 5432 -U USERNAME -d postgres
+```
+
+In `psql`:
+
+```text
+\l
+\dt
+\q
+```
+
+**Microsoft SQL Server (usually 1433):** use an approved SQL client and credentials; first identify the server/version with Nmap. Client availability and authentication options vary by Kali installation.
+
+Database results can be exported locally using approved client features, but avoid dumping entire databases or extracting personal data. Record only the minimum evidence required for the lab finding.
+
 
 ## 11. Investigate potential vulnerabilities
 
