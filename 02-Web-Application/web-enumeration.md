@@ -82,6 +82,57 @@ curl -i "$URL/this-path-should-not-exist-9f31"
 
 Avoid treating every `200` as a discovered file.
 
+### Discover directories and files with ffuf
+
+`ffuf` is an alternative to Gobuster for discovering web paths. The keyword `FUZZ` marks the part of the URL that ffuf replaces with each wordlist entry.
+
+Check whether ffuf and the built-in DIRB wordlist are installed:
+
+```bash
+command -v ffuf
+ls /usr/share/wordlists/dirb/common.txt
+```
+
+If missing, install them on Kali:
+
+```bash
+sudo apt update
+sudo apt install ffuf dirb
+```
+
+**Directory and path discovery:**
+
+```bash
+ffuf -u "$URL/FUZZ" \
+  -w /usr/share/wordlists/dirb/common.txt \
+  -rate 20 -mc all -fc 404 \
+  -of json -o scans/web/ffuf-dirs.json
+```
+
+`-mc all` considers all response codes, and `-fc 404` hides standard 404 responses. Review `200`, `301/302`, `401`, and `403` findings manually.
+
+**Find files with likely extensions:**
+
+```bash
+ffuf -u "$URL/FUZZ" \
+  -w /usr/share/wordlists/dirb/common.txt \
+  -e .php,.txt,.html,.bak \
+  -rate 20 -mc all -fc 404 \
+  -of json -o scans/web/ffuf-files.json
+```
+
+Use extensions that match the discovered application stack. `-e` appends the listed extensions to wordlist entries.
+
+**Handle wildcard or custom 404 responses:**
+
+```bash
+curl -i "$URL/this-path-should-not-exist-9f31"
+```
+
+If the application returns a normal-looking `200` or a redirect for nonexistent paths, `-fc 404` alone will not remove false positives. Compare the response body sizes for a few random paths, then use a measured size filter such as `-fs SIZE` (replace `SIZE` with the observed byte count), or consider `-ac` for ffuf auto-calibration. Check that filtering does not hide genuine paths.
+
+**Interpretation:** `FUZZ` is a placeholder, not a literal path. Both Gobuster and ffuf can discover the same resources; running both is optional, not a requirement. Respect rate limits and your lab's rules.
+
 ## 4. Identify virtual hosts and hostnames
 
 Look for hostnames in redirects, HTML, certificates and DNS results. When an in-scope hostname is found, map it locally:
