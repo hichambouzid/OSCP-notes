@@ -13,7 +13,7 @@ mkdir -p scans/web evidence/web
 curl -i "$URL/"
 ```
 
-Check the response status, `Location` redirects, cookies, page title, and any hostname mentioned in HTML or TLS certificates. If the lab provides a hostname, add it to `/etc/hosts` and use the hostname as your URL. Do not assume HTTP is always on 80 or HTTPS on 443.
+Check the response status, `Location` redirects, cookies, page title, and any hostname mentioned in HTML or TLS certificates. If the lab provides a hostname, add it to `/etc/hosts` and use the hostname as your URL. If the site uses a self-signed certificate, inspect its details before choosing whether to use `curl -k` for lab-only inspection; `-k` disables certificate verification. Do not assume HTTP is always on 80 or HTTPS on 443.
 
 ## 1. Fingerprint the web stack
 
@@ -257,6 +257,74 @@ nmap --script-help 'http-vuln*'
 
 Review script behavior before running any targeted vulnerability check; some scripts can be intrusive.
 
+## Additional enumeration checks
+
+### Inspect JavaScript and discover referenced endpoints
+
+JavaScript bundles often mention API routes, alternate hostnames and application features not linked in navigation. First list scripts from browser developer tools or page source:
+
+```bash
+grep -Eo 'src="[^"]+\.js[^"]*"' scans/web/index.html
+```
+
+This simple grep only catches some double-quoted script references; inspect the DOM/network tab for dynamically loaded scripts and relative paths. Fetch **only scripts belonging to the in-scope application** and search locally for routes and keywords:
+
+```bash
+curl -fL -o evidence/web/app.js "$URL/static/app.js"
+grep -En 'api/|fetch\(|axios|endpoint|graphql' evidence/web/app.js
+```
+
+`/static/app.js` is illustrative: substitute a path actually found. JavaScript references are leads, not evidence that an endpoint is accessible.
+
+### Inspect common metadata and source maps
+
+```bash
+curl -i "$URL/manifest.json"
+curl -i "$URL/favicon.ico"
+```
+
+Check discovered script URLs for a referenced `sourceMappingURL`. Source maps may expose readable client-side source code, but are not automatically a vulnerability. Record only in-scope findings and avoid publishing secrets.
+
+### Check supported technologies only when identified
+
+For an application identified as WordPress, use a purpose-built scanner only if it is installed and allowed by the lab:
+
+```bash
+command -v wpscan
+wpscan --url "$URL" --plugins-detection passive
+```
+
+The command is **WordPress-specific**; do not run it against unrelated frameworks. Passive results can still be incomplete or misleading. CMS plugins, themes and versions require verification.
+
+### Enumerate parameters and form inputs
+
+For each discovered page, record GET parameters, POST fields, JSON keys, multipart fields and relevant headers. Use Burp Repeater to compare a baseline request against **one changed input at a time**, keeping requests within the permitted test accounts.
+
+```bash
+curl -i "$URL/search?q=test"
+```
+
+`/search?q=` is only an example; replace it with a route and parameter found on your target. Note whether inputs appear in responses, redirects, errors or database-backed features. This prepares later SQLi, XSS, LFI and access-control testing without claiming any issue exists.
+
+### Review authorization boundaries and common exposures
+
+Using approved accounts and harmless resources, note whether unauthenticated and authenticated requests return different content for the **same** URL. For applications with multiple supplied test roles, compare which menus and endpoints each role is expected to access; do not access other users' private records.
+
+Check for exposed backups, debug pages, configuration files and directory listings **only when discovered or explicitly in scope**. A `403` usually means access is denied; do not assume bypass.
+
+### Review response security headers and CORS
+
+```bash
+curl -sSI "$URL/"
+curl -i -H 'Origin: https://example.invalid' "$URL/"
+```
+
+Look for `Content-Security-Policy`, `Strict-Transport-Security` (HTTPS only), `X-Content-Type-Options`, `Referrer-Policy`, and `Access-Control-Allow-Origin`. Missing headers are context-dependent hardening observations; CORS requires careful analysis of origin reflection and credential handling before calling it exploitable.
+
+### Keep separate notes for each web service
+
+A target may host different applications on `80`, `443`, `8080`, `8443`, and named virtual hosts. Repeat the workflow for each **discovered in-scope** application and maintain separate output folders so evidence does not overwrite earlier results.
+
 ## 10. Troubleshooting
 
 | Symptom | Likely cause / next action |
@@ -297,7 +365,10 @@ Next step:
 - [ ] Check for wildcard responses and misleading status codes.
 - [ ] Investigate in-scope virtual hosts.
 - [ ] Review authentication and session behavior.
-- [ ] Enumerate APIs and parameters.
+- [ ] Enumerate APIs, form parameters and JavaScript-referenced routes.
+- [ ] Check response security headers and relevant CORS behavior.
+- [ ] Review discovered CMS/framework-specific surfaces where applicable.
+- [ ] Repeat the workflow for every in-scope web port and virtual host.
 - [ ] Review uploads/downloads using harmless test files.
 - [ ] Research relevant advisories and validate potential findings.
 - [ ] Save sanitized evidence and next actions.
