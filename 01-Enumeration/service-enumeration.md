@@ -101,6 +101,112 @@ ftp "$IP"
 
 Check whether anonymous login is enabled and, if authorized, what files are readable. Do not modify or upload files without a specific reason and permission.
 
+### FTP anonymous login — step by step
+
+If Nmap reports `Anonymous FTP login allowed`, try connecting manually:
+
+```bash
+ftp "$IP"
+```
+
+At the prompts, enter:
+
+```text
+Name: anonymous
+Password: anonymous@
+```
+
+Many anonymous FTP servers accept any email-style password or an empty password; the server may also reject anonymous access despite a scan result.
+
+**Example session:**
+
+```text
+ftp> pwd
+ftp> ls
+ftp> dir
+ftp> cd pub
+ftp> ls -la
+ftp> binary
+ftp> get readme.txt
+ftp> bye
+```
+
+| FTP command | Purpose |
+| --- | --- |
+| `pwd` | Show the current remote FTP directory |
+| `ls` or `dir` | List remote files and directories |
+| `ls -la` | Request a detailed listing (server-dependent) |
+| `cd pub` | Enter the remote `pub` directory if it exists |
+| `cd ..` | Move to the parent remote directory |
+| `lcd evidence` | Change the **local** download destination (directory must exist) |
+| `binary` | Transfer files without text conversion |
+| `get filename` | Download one readable remote file |
+| `mget *.txt` | Download matching files (may prompt for each) |
+| `bye` | Disconnect |
+
+### Inspect remote files and download evidence
+
+FTP is a file-transfer protocol: the usual way to **read file contents** is to download the file to Kali and inspect it locally. Directory listings show filenames and metadata, not the full contents of a file.
+
+On Kali, before opening the FTP client:
+
+```bash
+mkdir -p evidence/ftp
+ftp "$IP"
+```
+
+Then in the FTP prompt:
+
+```text
+ftp> pwd
+ftp> ls
+ftp> lcd evidence/ftp
+ftp> binary
+ftp> get notes.txt
+ftp> bye
+```
+
+Back in the Kali terminal, inspect the downloaded file:
+
+```bash
+file evidence/ftp/notes.txt
+ls -lah evidence/ftp/
+cat evidence/ftp/notes.txt
+less evidence/ftp/notes.txt
+```
+
+For a file that may contain non-text data, start with `file` rather than `cat`.
+
+If the FTP server is on a **nonstandard port**, use `ftp` with that port, for example:
+
+```bash
+ftp "$IP" 2121
+```
+
+### Download multiple files
+
+Inside the FTP prompt, after entering the correct remote directory:
+
+```text
+ftp> lcd evidence/ftp
+ftp> binary
+ftp> prompt
+ftp> mget *.txt
+ftp> bye
+```
+
+`prompt` toggles interactive confirmation for multi-file transfers. Use `mget` only for files in scope; it does not recursively download entire directory trees.
+
+### Troubleshooting FTP access
+
+- **530 Login incorrect:** Anonymous access may be disabled, restricted, or require a different password format.
+- **550 Permission denied / File unavailable:** The file may not exist or your FTP account may lack permission.
+- **Directory listing hangs:** Check passive mode and VPN/firewall behavior; in the interactive client, `passive` toggles passive mode on implementations that support it.
+- **Downloaded file looks corrupted:** Use `binary` before transferring it.
+- **Cannot locate the downloaded file:** Run `lpwd` if supported, or set the destination with `lcd` before `get`.
+
+**Security note:** FTP transmits credentials and data without encryption. Anonymous FTP is common in labs but should not be used for sensitive production transfers. Do not publish downloaded credentials or private files in this public repository.
+
 Look for backups, configuration files, web-root content and version clues. A banner version is a lead for research, not proof of a CVE.
 
 ## 4. SSH — Secure Shell (22)
