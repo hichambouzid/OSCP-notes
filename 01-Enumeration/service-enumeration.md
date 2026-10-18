@@ -80,12 +80,12 @@ To inspect an HTTP response and download a publicly accessible file:
 ```bash
 curl -I "http://$IP:80/"
 curl -o evidence/web-page.html "http://$IP:80/"
-curl -O "http://$IP:80/readme.txt"
+curl -f -o evidence/readme.txt "http://$IP:80/readme.txt"
 file evidence/web-page.html
 less evidence/web-page.html
 ```
 
-`curl -O` saves using the remote basename in the current directory. Replace `readme.txt` with a file actually discovered; do not assume it exists. `-I` requests headers and may be unsupported by some servers.
+`curl -f -o` saves to an explicit local path and fails on HTTP 4xx/5xx responses. Replace `readme.txt` with a file actually discovered; do not assume it exists. `-I` requests headers and may be unsupported by some servers.
 
 For paths discovered with Gobuster, request them individually and distinguish `200` (response), `301/302` (redirect), `401` (authentication required), `403` (forbidden), and `404` (not found). A `200` alone does not prove sensitive data exposure.
 
@@ -120,13 +120,7 @@ Look for:
 
 ### Practical SMB share access and downloads
 
-List shares without supplying a password (only works if anonymous/guest access is allowed):
-
-```bash
-smbclient -L "//$IP/" -N
-```
-
-Connect to a share returned by the listing:
+Use the share list above; anonymous/guest access is not guaranteed. Connect to a share returned by the listing:
 
 ```bash
 mkdir -p evidence/smb
@@ -140,12 +134,12 @@ smb: \\> pwd
 smb: \\> ls
 smb: \\> cd documents
 smb: \\> ls
-smb: \\> lcd evidence/smb
+smb: \\> lcd /absolute/path/to/your/repository/evidence/smb
 smb: \\> get readme.txt
 smb: \\> exit
 ```
 
-Replace `SHARE`, `documents`, and `readme.txt` with names actually returned. `lcd` changes the local download directory. The `get` command downloads a readable file; listing a share does not prove file access.
+Replace `SHARE`, `documents`, `readme.txt`, and the example absolute path with real values. `lcd` changes the local download directory; use an absolute path to avoid ambiguity. The `get` command downloads a readable file; listing a share does not prove file access.
 
 Inspect locally:
 
@@ -170,12 +164,7 @@ Check whether anonymous login is enabled and, if authorized, what files are read
 
 ### FTP anonymous login — step by step
 
-If Nmap reports `Anonymous FTP login allowed`, try connecting manually:
-
-```bash
-ftp "$IP"
-```
-
+If Nmap reports `Anonymous FTP login allowed`, use the `ftp "$IP"` connection shown above and try anonymous authentication.
 At the prompts, enter:
 
 ```text
@@ -190,9 +179,8 @@ Many anonymous FTP servers accept any email-style password or an empty password;
 ```text
 ftp> pwd
 ftp> ls
-ftp> dir
 ftp> cd pub
-ftp> ls -la
+ftp> dir
 ftp> binary
 ftp> get readme.txt
 ftp> bye
@@ -202,10 +190,10 @@ ftp> bye
 | --- | --- |
 | `pwd` | Show the current remote FTP directory |
 | `ls` or `dir` | List remote files and directories |
-| `ls -la` | Request a detailed listing (server-dependent) |
+| `dir` | Request a detailed listing (server-dependent) |
 | `cd pub` | Enter the remote `pub` directory if it exists |
 | `cd ..` | Move to the parent remote directory |
-| `lcd evidence` | Change the **local** download destination (directory must exist) |
+| `lcd /absolute/path/to/evidence` | Change the **local** download destination (directory must exist) |
 | `binary` | Transfer files without text conversion |
 | `get filename` | Download one readable remote file |
 | `mget *.txt` | Download matching files (may prompt for each) |
@@ -227,13 +215,13 @@ Then in the FTP prompt:
 ```text
 ftp> pwd
 ftp> ls
-ftp> lcd evidence/ftp
+ftp> lcd /absolute/path/to/your/repository/evidence/ftp
 ftp> binary
 ftp> get notes.txt
 ftp> bye
 ```
 
-Back in the Kali terminal, inspect the downloaded file:
+Replace the sample `lcd` path with the absolute path to the directory created on Kali. Back in the Kali terminal, inspect the downloaded file:
 
 ```bash
 file evidence/ftp/notes.txt
@@ -262,7 +250,7 @@ ftp> mget *.txt
 ftp> bye
 ```
 
-`prompt` toggles interactive confirmation for multi-file transfers. Use `mget` only for files in scope; it does not recursively download entire directory trees.
+`prompt` toggles interactive confirmation for multi-file transfers; check its current state before using it. Use `mget` only for files in scope; it does not recursively download entire directory trees.
 
 ### Troubleshooting FTP access
 
@@ -408,12 +396,6 @@ Review supported SMTP commands, TLS options, banner information and mail domain 
 
 SMTP is a **mail transport protocol**, not a remote file browser. You can inspect the server's greeting and supported commands without sending a message.
 
-First identify which SMTP ports are actually open:
-
-```bash
-sudo nmap -Pn -sV -p 25,465,587 --script smtp-commands -oA scans/smtp-info "$IP"
-```
-
 **Plain SMTP on port 25** (when permitted):
 
 ```bash
@@ -441,9 +423,11 @@ After the TLS handshake, type `EHLO kali.lab` and then `QUIT`. For implicit TLS 
 openssl s_client -connect "$IP:465" -crlf
 ```
 
+After the implicit TLS handshake, send `EHLO kali.lab` and `QUIT` in the encrypted session. For STARTTLS, the SMTP capabilities may change after upgrading to TLS, so repeat `EHLO` after the handshake.
+
 Inspect the certificate, hostname, server greeting, `EHLO` extensions, and whether STARTTLS and AUTH are advertised. `AUTH` being advertised does not mean anonymous login is possible.
 
-To save a non-authenticating SMTP capability check:
+To save a non-authenticating SMTP capability check on plaintext port 25 (some servers close connections or require a valid hostname):
 
 ```bash
 printf 'EHLO kali.lab\r\nQUIT\r\n' | nc -w 5 "$IP" 25 | tee scans/smtp-ehlo.txt
@@ -462,12 +446,6 @@ showmount -e "$IP"
 Check exports and client restrictions. Do not assume that an exported path is accessible or writable; verify with authorized, non-destructive checks.
 
 ### Practical NFS access and read-only file inspection
-
-Enumerate exported paths:
-
-```bash
-showmount -e "$IP"
-```
 
 If the server exports an authorized path and your client is permitted, mount it **read-only** to avoid modifying remote files:
 
@@ -550,7 +528,7 @@ In `psql`:
 \q
 ```
 
-**Microsoft SQL Server (usually 1433):** use an approved SQL client and credentials; first identify the server/version with Nmap. Client availability and authentication options vary by Kali installation.
+**Microsoft SQL Server (usually 1433):** use an approved SQL client and credentials; first identify the server/version with Nmap. Client availability and authentication options vary by Kali installation. For example, where `impacket-mssqlclient` is installed, check its help and use the supplied lab credentials; avoid queries that modify the server.
 
 Database results can be exported locally using approved client features, but avoid dumping entire databases or extracting personal data. Record only the minimum evidence required for the lab finding.
 
