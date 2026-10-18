@@ -62,7 +62,7 @@ The cipher enumeration script makes multiple handshakes; run only when permitted
 
 **Potential findings:** exposed sensitive files, outdated components, missing access controls, insecure configuration. Confirm with actual evidence; banners alone are insufficient.
 
-**Next:** [Web Application notes](../02-Web-Application/) when that section is available.
+**Next:** Record web findings here and move to the Web Application section when its documentation has been added to the repository.
 
 ### Practical web access, browsing and downloads
 
@@ -243,7 +243,7 @@ ftp "$IP" 2121
 Inside the FTP prompt, after entering the correct remote directory:
 
 ```text
-ftp> lcd evidence/ftp
+ftp> lcd /absolute/path/to/your/repository/evidence/ftp
 ftp> binary
 ftp> prompt
 ftp> mget *.txt
@@ -280,7 +280,7 @@ Look for the SSH product/version, host keys, supported algorithms and authentica
 SSH normally requires **authorized credentials or a valid key**; it does not provide anonymous file browsing.
 
 ```bash
-ssh -p 22 USERNAME@"$IP"
+ssh -p 22 "USERNAME@$IP"
 ```
 
 Once logged in with approved credentials:
@@ -299,13 +299,13 @@ To copy a file that the account is allowed to read, from **your Kali terminal**:
 
 ```bash
 mkdir -p evidence/ssh
-scp -P 22 USERNAME@"$IP":/home/USERNAME/notes.txt evidence/ssh/
+scp -P 22 "USERNAME@$IP:/home/USERNAME/notes.txt" evidence/ssh/
 ```
 
 Replace usernames, paths and ports with actual values. `scp -P` uses an uppercase P for port. If the host only supports SFTP:
 
 ```bash
-sftp -P 22 USERNAME@"$IP"
+sftp -P 22 "USERNAME@$IP"
 ```
 
 Then use `pwd`, `ls`, `cd`, `lcd evidence/ssh`, `get notes.txt`, and `bye`. Do not download private material outside the lab scope.
@@ -588,7 +588,7 @@ Next action:
 - [ ] Enumerate web applications, including hostnames and virtual hosts.
 - [ ] Inspect accessible SMB shares and permissions.
 - [ ] Check FTP, SSH, DNS and SNMP as applicable.
-- [ ] Investigate mail, NFS, RDP and database services when present.
+- [ ] Investigate mail (SMTP, POP3, IMAP), NFS, RDP and database services when present.
 - [ ] Save all commands and outputs.
 - [ ] Research versions and validate potential weaknesses.
 - [ ] Record credentials and sensitive findings securely in your local lab notes, **not in a public GitHub repository**.
