@@ -8,6 +8,10 @@ Hands-on notes for **authorized OSCP labs and penetration testing practice**. Co
 2. **[Nmap Enumeration](01-Enumeration/nmap.md)** — Scan all TCP ports, investigate UDP ports, identify versions, and triage potential vulnerabilities.
 3. **[Service-Specific Enumeration](01-Enumeration/service-enumeration.md)** — Follow practical HTTP, SMB, FTP, SSH, DNS, SNMP, SMTP, NFS, RDP, and database walkthroughs.
 
+## Web application testing
+
+4. **[Web Application Enumeration](02-Web-Application/web-enumeration.md)** — Fingerprint web apps, discover content and virtual hosts, inspect authentication and APIs, and triage possible vulnerabilities.
+
 ## Quick start
 
 ```bash
@@ -30,4 +34,4 @@ Continue with the linked guides to enumerate detected services. `-Pn` skips host
 
 ## Repository status
 
-The enumeration guides above are available. Additional sections for web application testing, initial access, privilege escalation, Active Directory, password attacks, pivoting, exam workflow, and lab writeups are planned but are **not yet published here**.
+The enumeration and web-application enumeration guides above are available. Additional sections for initial access, privilege escalation, Active Directory, password attacks, pivoting, exam workflow, and lab writeups are planned but are **not yet published here**.
