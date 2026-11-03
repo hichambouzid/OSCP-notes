@@ -366,6 +366,28 @@ The first condition requests a roughly 5-second delay if the expression is evalu
 
 **OSCP exam tool check:** [OffSec's OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) explicitly permits **Burp Free**; it prohibits automatic exploitation tools including **SQLmap** and **SQLninja**, as well as AI chatbot assistance during the exam. Use manual Repeater requests, not prohibited automation.
 
+### Directory traversal and LFI — Part 1: detection
+
+Use this **only against authorized lab applications**. Look for parameters that select a file or template (for example, `?page=home.php` or `?file=help.txt`). **Directory traversal** uses path sequences such as `../` to move outside an intended directory; **local file inclusion (LFI)** occurs when a web application includes a local file as part of processing a request.
+
+**1. Establish a baseline.** Find a working file parameter and record the original status, body and redirect behavior:
+
+```text
+http://TARGET/index.php?page=home.php
+```
+
+**2. Test one traversal path manually.** On an authorized Linux lab, compare the baseline with:
+
+```text
+http://TARGET/index.php?page=../../../../etc/passwd
+```
+
+If the application returns recognizable local file content (for example, lines formatted like `root:x:0:0:...`), that is evidence of unintended file access. A `404`, `403`, blank response or error **does not prove** the target is safe or vulnerable. File paths, filtering and the application's expected suffix/prefix may vary.
+
+**3. Validate and document.** Use **Burp Suite Community (Free) → Repeater** (or manual `curl` requests) to change one parameter at a time. Check that results are consistent and actually originate from the target, then record the exact request, response, path depth and evidence. Do not access unnecessary sensitive files or publish real data in this public repository.
+
+**Exam tool check:** [OffSec's OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) explicitly allows **Burp Free**. Manual requests are not automatic exploitation. The guide prohibits commercial Burp Pro, automatic exploitation tools and AI chatbot assistance during the exam. Check the latest guide before exam day.
+
 ## Additional enumeration checks
 
 ### Inspect JavaScript and discover referenced endpoints
@@ -483,6 +505,7 @@ Next step:
 - [ ] Manually test discovered database-backed inputs for possible SQLi and compare true/false responses.
 - [ ] If SQLi is confirmed, manually determine UNION column count and reflected output columns.
 - [ ] If SQLi output is not reflected, compare manual boolean-based and time-based blind SQLi tests.
+- [ ] Manually test identified file parameters for directory traversal/LFI and record sanitized evidence.
 - [ ] Save sanitized evidence and next actions.
 
 ## References
