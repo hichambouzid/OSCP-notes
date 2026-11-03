@@ -301,6 +301,45 @@ Submit each value separately (for example, in the `id` parameter) and compare st
 
 **OSCP exam tool check:** [OffSec's OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) explicitly permits Burp Free and prohibits automatic exploitation tools such as **SQLmap** and **SQLninja**. Do not use prohibited features or AI assistance during the actual exam.
 
+### Manual SQL injection (SQLi) — Part 2: UNION-based testing
+
+Use **only after confirming a SQL injection point** in an authorized lab. The examples below assume a **single-quoted string parameter** and a MySQL-like comment syntax (`-- -`). Adapt quoting, comments, and URL encoding to the actual query and database. Send one manual test at a time using **Burp Suite Community (Free) → Repeater**.
+
+**1. Determine the number of result columns.** Increase `ORDER BY` until the query fails; the previous working number is a clue to the column count:
+
+```sql
+' ORDER BY 1-- -
+' ORDER BY 2-- -
+' ORDER BY 3-- -
+```
+
+**2. Test a matching `UNION SELECT`.** For example, if there are three columns:
+
+```sql
+' UNION SELECT NULL,NULL,NULL-- -
+```
+
+`UNION` needs the same number of columns as the original query, with compatible data types. A failed response is not conclusive; the injection context may require different syntax.
+
+**3. Find a reflected text column.** If the three-column example succeeds, replace one `NULL` at a time with an identifiable string:
+
+```sql
+' UNION SELECT NULL,'OSCP_TEST',NULL-- -
+```
+
+If `OSCP_TEST` appears in the page, that column may be useful for displaying results.
+
+**4. Identify database details** only in a compatible, reflected column. Example for **MySQL/MariaDB** with three columns:
+
+```sql
+' UNION SELECT NULL,version(),NULL-- -
+' UNION SELECT NULL,database(),NULL-- -
+```
+
+Database functions differ: for **Microsoft SQL Server**, examples include `@@VERSION` and `DB_NAME()`. Do not assume the same payload works across database engines.
+
+**Record:** injectable URL/parameter, baseline response, working column count, reflected column, detected database, and sanitized response evidence. Manual testing with Burp Free is permitted under the [official OffSec OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide); automatic exploitation tools such as SQLmap and SQLninja are prohibited.
+
 ## Additional enumeration checks
 
 ### Inspect JavaScript and discover referenced endpoints
@@ -416,6 +455,7 @@ Next step:
 - [ ] Review uploads/downloads using harmless test files.
 - [ ] Check discovered web service versions against vendor advisories/CVEs; verify findings before claiming a vulnerability.
 - [ ] Manually test discovered database-backed inputs for possible SQLi and compare true/false responses.
+- [ ] If SQLi is confirmed, manually determine UNION column count and reflected output columns.
 - [ ] Save sanitized evidence and next actions.
 
 ## References
