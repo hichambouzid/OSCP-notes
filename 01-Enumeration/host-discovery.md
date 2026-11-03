@@ -132,15 +132,20 @@ When the exam or lab explicitly assigns a target IP, you can proceed to port sca
 
 ```bash
 sudo nmap -Pn -p 22,80,443,445 "$IP"
-sudo nmap -Pn -sS -p- --min-rate 1000 -oA scans/tcp-all "$IP"
+sudo nmap -Pn -sS -p- --reason -oA scans/tcp-all "$IP"
 ```
 
-`-Pn` skips host discovery; it **does not** confirm that the host is alive. `-p-` scans all 65,535 TCP ports. Aggressive packet rates can lose results on unstable links; reduce speed and rescan if necessary.
+`-Pn` skips host discovery; it **does not** confirm that the host is alive. `-p-` scans all 65,535 TCP ports. Avoid forcing an aggressive minimum rate during the first scan: it can hide results on unstable or rate-limited links. If results are unexpected, verify the VPN/route and rescan conservatively.
 
 After identifying open ports, replace the example list:
 
 ```bash
-sudo nmap -Pn -sC -sV -p 22,80,445 -oA scans/tcp-services "$IP"
+PORTS=$(grep -oE '[0-9]+/open/tcp' scans/tcp-all.gnmap | cut -d/ -f1 | sort -nu | paste -sd, -)
+if [ -n "$PORTS" ]; then
+  sudo nmap -Pn -sC -sV -p "$PORTS" -oA scans/tcp-services "$IP"
+else
+  echo "No confirmed open TCP ports: check the scan, VPN and filtering."
+fi
 ```
 
 - `-sC`: default NSE scripts.
@@ -226,13 +231,13 @@ Evidence: scans/tcp-all.nmap
 
 **Important:** The full TCP scan (`-sS -p-`) does **not** include UDP. Run UDP scans separately on assigned targets. The earlier `-sn -PU` command is for **host discovery**, not UDP port enumeration.
 
-### Step 1 — Scan the top 100 UDP ports
+### Step 1 — Initial UDP pass (top 100; NOT exhaustive)
 
 ```bash
 sudo nmap -Pn -sU --top-ports 100 -oA scans/udp-top100 "$IP"
 ```
 
-This is a practical starting point because UDP scans can take considerably longer than TCP scans.
+This is a **first pass**, not complete UDP coverage. UDP scans can take considerably longer than TCP scans. Keep an explicit follow-up for additional ports if the initial pass finds no useful lead.
 
 ### Step 2 — Expand if necessary
 
@@ -280,7 +285,8 @@ Read script help first; use scripts relevant to the actual service and lab autho
 
 ### UDP checklist
 
-- [ ] Run a top-100 UDP scan after the TCP scan.
+- [ ] Run a top-100 UDP first pass after the full TCP scan; never consider this comprehensive by itself.
+- [ ] Record whether UDP was expanded to targeted ports, top 1,000 or all ports.
 - [ ] Investigate promising UDP ports with `-sV`.
 - [ ] Use service-specific NSE scripts only after reviewing them.
 - [ ] Expand to more UDP ports if the target and available time justify it.
