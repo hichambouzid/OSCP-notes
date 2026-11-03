@@ -4,6 +4,19 @@
 >
 > **Objective:** Map the application's hostnames, routes, technologies, authentication, exposed content and likely weaknesses before attempting exploitation.
 
+## Quick navigation
+
+- [Prepare the target and fingerprint the stack](#0-prepare-and-establish-the-correct-url)
+- [Directory and FFUF discovery](#3-discover-directories-and-files)
+- [DNS subdomains and virtual hosts](#4-identify-virtual-hosts-and-hostnames)
+- [Authentication, APIs and uploads](#6-authentication-and-session-mapping)
+- [CVE checks and SQL injection](#9-vulnerability-triage--from-evidence-to-verification)
+- [LFI, PHP wrappers and path encoding](#directory-traversal-and-lfi--part-1-detection)
+- [File upload and command injection](#file-upload--part-1-detection-and-restrictions)
+- [Additional manual web checks](#10-further-manual-web-security-checks)
+- [Exam tools and evidence rules](#11-exam-tool-policy-and-evidence-rules)
+- [Troubleshooting and final checklist](#12-troubleshooting)
+
 ## 0. Prepare and establish the correct URL
 
 ```bash
@@ -681,7 +694,136 @@ Look for `Content-Security-Policy`, `Strict-Transport-Security` (HTTPS only), `X
 
 A target may host different applications on `80`, `443`, `8080`, `8443`, and named virtual hosts. Repeat the workflow for each **discovered in-scope** application and maintain separate output folders so evidence does not overwrite earlier results.
 
-## 10. Troubleshooting
+## 10. Further manual web security checks
+
+The earlier sections cover initial discovery, SQLi, LFI, file uploads and initial command-injection detection. The following **short manual workflows** fill other important web-testing gaps. Test only explicitly in-scope functionality, using lab-provided accounts where needed. Record a baseline, change one input at a time, and verify evidence rather than assuming every unusual response is a vulnerability.
+
+### OS Command Injection — Part 2: follow-up after confirmed execution
+
+Only proceed if Part 1 demonstrated actual server-side OS command execution (not reflected input). Decide whether an interactive shell is necessary for the lab objective.
+
+1. Identify your Kali VPN address and open a manual listener in a separate terminal:
+
+~~~bash
+ip -br addr
+nc -lvnp 4444
+~~~
+
+2. If the authorized lab calls for a reverse shell, use a **manually chosen, non-Meterpreter shell method** appropriate to the target OS and available interpreters, and submit it through the already-confirmed injection point. The parameter value may need URL encoding; make sure its quoting and delimiters reach the application unchanged. Avoid automatic exploitation or unreviewed scripts.
+3. Once a legitimate callback is established, identify the user and, if supported, improve interactivity:
+
+~~~bash
+whoami
+id
+hostname
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+export TERM=xterm
+~~~
+
+The Python step is for a Linux target with Python 3 and Bash installed. A web-server shell typically runs as a low-privileged service account. If there is no callback, verify the injection point, VPN address, listener, target shell, outbound connectivity and encoding instead of blindly retrying. Keep an exact, sanitized record of the request and resulting shell context.
+
+### Reflected, stored and DOM-based XSS — manual checks
+
+Identify URL parameters, search fields, comments, profile fields and client-side JavaScript that display user-controlled input.
+
+1. Submit an identifiable harmless value (for example, `OSCP_XSS_MARKER`) and check whether it appears in HTML, attributes or JavaScript.
+2. On the **authorized lab application**, try a simple browser-only proof of concept in a suitable HTML context:
+
+~~~html
+<script>alert(1)</script>
+~~~
+
+3. Check whether a browser actually executes the script rather than displaying it as text. For stored XSS, use only a lab-provided account or page you control; for DOM XSS, inspect client-side sources such as URL fragments and sinks such as `innerHTML`.
+
+A reflected marker is **not XSS** by itself. Output encoding, CSP, input context and browser behavior matter. Do not use credential-exfiltration or session-theft payloads. Record the entry point and the exact browser behavior.
+
+### Authentication, sessions and IDOR/BOLA
+
+Use **two supplied test accounts** (or two lab roles) and a resource created by each account. Capture the same request in Burp Free Repeater and compare allowed versus disallowed behavior.
+
+- **Authentication:** inspect login and logout behavior, password-reset flows, lockout/rate-limit signals and whether access is actually denied without a valid session.
+- **Sessions:** inspect `Set-Cookie` flags (`HttpOnly`, `Secure`, `SameSite`), whether logout invalidates the session, and whether a pre-login session identifier is rotated after login.
+- **IDOR / BOLA:** for an endpoint such as `GET /api/orders/101`, verify whether account A can access a resource that belongs to account B after **only the resource ID changes**. An authenticated `200` response is not enough: inspect whether it exposes data or functionality belonging to the other authorized test user.
+- **Role checks:** compare a lower-privileged lab user with an approved administrator test account on a discovered privileged function.
+
+Avoid collecting other users' private data. Save sanitized before/after requests showing the access-control boundary.
+
+### CSRF and state-changing requests
+
+For a **non-destructive lab action** such as changing a test profile preference, capture the request and identify its session cookies, anti-CSRF tokens, `Origin`/`Referer` handling and `SameSite` behavior. In a controlled test, check whether a missing or invalid anti-CSRF token causes rejection. A missing token **alone** does not establish CSRF; browser credential behavior and other defenses matter. Do not trigger real transactions or account takeover actions.
+
+### Server-Side Template Injection (SSTI) — detection
+
+Look for features that render user-supplied templates, custom messages or server-side previews. First compare a literal marker with a harmless arithmetic expression:
+
+~~~text
+OSCP_TEMPLATE_TEST
+{{7*7}}
+~~~
+
+If the response contains `49` where the expression was supplied, investigate carefully: the result may come from a template engine, client-side processing, or an unrelated transformation. Template syntax differs among engines; do not assume Jinja2, Twig and other frameworks interpret expressions identically. Do not escalate to command execution until the engine and context are verified and the lab permits it.
+
+### Server-Side Request Forgery (SSRF) — controlled callback
+
+Look for URL importers, link previews, webhook testers, image fetchers and PDF generation from URLs. To determine whether the **server** (rather than your browser) fetches a user-supplied URL, run a simple HTTP server on your own Kali machine **from an otherwise empty directory**:
+
+~~~bash
+mkdir -p evidence/web/ssrf-callback
+cd evidence/web/ssrf-callback
+python3 -m http.server 8000
+~~~
+
+If the lab feature accepts a URL, submit `http://KALI_VPN_IP:8000/ssrf-test` with your real VPN IP, and watch for an incoming request. A callback is evidence of server-initiated fetching but **not proof** that the application can reach protected internal resources. Do not probe cloud metadata, private networks or third-party hosts outside your assigned scope.
+
+### XML handling and XXE — safe parser check
+
+For a **discovered XML endpoint** that you are permitted to test, first check whether the application accepts normal XML. A harmless *internal* entity can show whether entity expansion occurs:
+
+~~~xml
+<?xml version="1.0"?>
+<!DOCTYPE note [<!ENTITY marker "OSCP_XML_MARKER">]>
+<note><body>&marker;</body></note>
+~~~
+
+If the response resolves `&marker;` to `OSCP_XML_MARKER`, it suggests entity expansion. **This alone does not prove XXE** (which involves external entity resolution). Avoid requesting local files or causing large expansions as an initial test. Investigate external entities only when explicitly in scope and needed to verify impact.
+
+### Open redirects and API request validation
+
+- **Open redirect:** inspect discovered `next`, `return`, or `redirect` parameters. Compare a normal internal return path with a harmless external URL you control, and check the `Location` header or browser navigation. Not every redirect is a security flaw; exploitability depends on context.
+- **APIs:** inspect methods, `Content-Type`, error codes, JSON field names, authorization checks and pagination on endpoints actually found in your lab. A parameter accepted by the server is not proof of mass assignment: compare what changes in your test account's resources.
+- **Information disclosure:** note verbose errors, server stack traces, debug flags, source maps, backup files and unexpected response headers without disclosing sensitive values in this public repository.
+
+### Quick decision guide
+
+| Observation | Next manual check |
+| --- | --- |
+| Product/version banner | Verify versions and vendor CVEs (Section 9) |
+| URL or form input changes a database result | SQLi detection, then UNION or blind checks |
+| File/template parameter | Traversal/LFI and, when applicable, PHP wrapper behavior |
+| Upload endpoint | Extension and MIME validation, then harmless execution test |
+| Network diagnostic input | OS command-injection marker and timing tests |
+| Reflected HTML/JS | Context-aware XSS checks |
+| Data accessible by numeric ID | IDOR/BOLA comparison with two lab accounts |
+| Template-like render input | Harmless SSTI expression |
+| URL-fetching feature | SSRF callback to your own Kali listener |
+| XML-consuming endpoint | XML parser behavior, then scoped XXE investigation |
+
+## 11. Exam tool policy and evidence rules
+
+**Exam-guide check: 2026-11-03.** Always consult the current [OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) before taking the exam. The allowed status depends on **what the tool or feature does**, not just its name.
+
+| Tool or capability | OSCP+ status / condition |
+| --- | --- |
+| Nmap and NSE; Nikto; Burp Suite Free; DirBuster | Explicitly permitted by OffSec |
+| Manual `curl`, `nc`, `base64`, `python3`; ffuf, Gobuster, WhatWeb, SearchSploit | Not individually approved in the guide; use only for allowed discovery/manual tasks, never prohibited automation |
+| `msfvenom` and `exploit/multi/handler` | OffSec permits these across targets **except** that Meterpreter payload use is limited |
+| Metasploit Auxiliary/Exploit/Post modules; Meterpreter payload | Restricted to **one chosen target**; no Metasploit pivoting to other machines |
+| SQLmap, SQLninja and other automatic exploitation; mass vulnerability scanners; Burp Pro | Prohibited |
+| AI chatbots/LLMs during the exam | Prohibited |
+
+Do not reproduce sensitive exam content or commit discovered passwords, private keys, cookies, tokens, or proof values to a public repository. OffSec requires proof files to be read with `cat` or `type` **from their original paths in an interactive shell** and shown in properly documented screenshots; a web shell does not satisfy this requirement. See the [OffSec AI policy](https://help.offsec.com/hc/en-us/articles/35549468971156-AI-Usage-Policy-in-OffSec-Exams).
+
+## 12. Troubleshooting
 
 | Symptom | Likely cause / next action |
 | --- | --- |
@@ -694,7 +836,7 @@ A target may host different applications on `80`, `443`, `8080`, `8443`, and nam
 | 429 / rate limiting | Reduce request rate; stop if required by scope |
 | Download contains HTML instead of file | Check redirects, authentication and content type |
 
-## 11. Evidence template
+## 13. Evidence template
 
 ```text
 Target IP:
@@ -712,6 +854,9 @@ Next step:
 ```
 
 ## OSCP checklist
+
+Use only checks relevant to discovered functionality; a completed checklist does not prove an application is vulnerability-free.
+
 
 - [ ] Confirm correct IP, hostname, scheme and port.
 - [ ] Fingerprint headers, application and technologies.
@@ -737,9 +882,14 @@ Next step:
 - [ ] Test extension and multipart Content-Type validation manually using harmless upload files; verify storage and retrieval.
 - [ ] After confirming PHP execution, obtain and stabilize an authorized reverse shell; record the shell context.
 - [ ] Manually test relevant input parameters for OS command injection using output markers or controlled timing checks.
+- [ ] Complete manual XSS, authentication, IDOR/BOLA, CSRF, SSTI, SSRF, XML and API checks where features exist.
+- [ ] If command injection is confirmed, document shell access and the target account (authorized labs only).
 - [ ] Save sanitized evidence and next actions.
 
 ## References
+
+- [OffSec OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide)
+- [OWASP WSTG 4.2 — Web application security testing](https://wstg.owasp.org/stable/4-Web_Application_Security_Testing/)
 
 - [OWASP Web Security Testing Guide](https://owasp.org/www-project-web-security-testing-guide/)
 - [OWASP Testing Guide — Information Gathering](https://owasp.org/www-project-web-security-testing-guide/stable/4-Web_Application_Security_Testing/01-Information_Gathering/)
