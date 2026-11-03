@@ -272,6 +272,35 @@ nmap --script-help 'http-vuln*'
 
 Review script behavior before running any targeted vulnerability check; some scripts can be intrusive.
 
+### Manual SQL injection (SQLi) — Part 1: detection
+
+For **authorized lab targets only**, look for inputs that may feed database queries (URL query parameters, form fields and API parameters). Change one input at a time and compare with a baseline.
+
+**1. Identify a parameter and record the normal response:**
+
+```text
+http://TARGET/product.php?id=1
+```
+
+**2. Test a single quote** (`%27` is URL-encoded `'`):
+
+```text
+http://TARGET/product.php?id=1%27
+```
+
+Look for database errors, unusual HTTP responses or changed content. A response difference **does not by itself prove SQLi**.
+
+**3. Compare true versus false conditions** on a numeric parameter:
+
+```sql
+1 AND 1=1
+1 AND 1=2
+```
+
+Submit each value separately (for example, in the `id` parameter) and compare status, body and application behavior with the baseline. Consistent differences are evidence to investigate, not confirmation. Use **Burp Suite Community (Free) → Repeater** to edit and compare individual HTTP requests manually.
+
+**OSCP exam tool check:** [OffSec's OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) explicitly permits Burp Free and prohibits automatic exploitation tools such as **SQLmap** and **SQLninja**. Do not use prohibited features or AI assistance during the actual exam.
+
 ## Additional enumeration checks
 
 ### Inspect JavaScript and discover referenced endpoints
@@ -386,6 +415,7 @@ Next step:
 - [ ] Repeat the workflow for every in-scope web port and virtual host.
 - [ ] Review uploads/downloads using harmless test files.
 - [ ] Check discovered web service versions against vendor advisories/CVEs; verify findings before claiming a vulnerability.
+- [ ] Manually test discovered database-backed inputs for possible SQLi and compare true/false responses.
 - [ ] Save sanitized evidence and next actions.
 
 ## References
