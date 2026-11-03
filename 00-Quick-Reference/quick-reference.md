@@ -6,7 +6,8 @@
 
 ~~~bash
 export IP=192.168.56.101  # Replace with your assigned host
-mkdir -p scans evidence    # Work in a private lab folder, not a public Git checkout
+mkdir -p "$HOME/oscp-local/$IP"/{scans,evidence}
+cd "$HOME/oscp-local/$IP"  # Private working directory outside the public Git repo
 ip route get "$IP"
 
 # Full TCP first: ports 1–65535 (no forced minimum probe rate)
