@@ -418,6 +418,40 @@ Copy **just the encoded string**, not the surrounding HTML. Inspect the decoded 
 
 **Exam tool check:** Manual requests through **Burp Suite Community (Free) → Repeater** are compatible with the [OffSec OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide), which explicitly allows Burp Free. The `base64` command performs local decoding, not automatic exploitation. The guide prohibits automatic exploitation tools and AI chatbot assistance during the exam. Recheck the current rules before exam day.
 
+### LFI — Part 3: path traversal bypasses and URL encoding
+
+Use these examples **only against authorized lab targets** and only after identifying a file-loading parameter. Some applications block `../` using incomplete input filtering. Compare each manual request with a valid baseline, changing **one thing at a time**. These examples assume a Linux target and a `file` parameter.
+
+**1. Baseline traversal** — test whether the application reads outside its intended directory:
+
+```text
+http://TARGET/index.php?file=../../../../etc/passwd
+```
+
+**2. URL-encoded slashes** — `%2f` represents `/` in URL encoding:
+
+```text
+http://TARGET/index.php?file=..%2f..%2f..%2f..%2fetc%2fpasswd
+```
+
+**3. Double URL encoding** — `%252f` may become `%2f` after one decoding step and `/` after a second:
+
+```text
+http://TARGET/index.php?file=..%252f..%252f..%252f..%252fetc%252fpasswd
+```
+
+This is relevant only if multiple decoding stages occur; don't assume it bypasses a filter.
+
+**4. Nested traversal** — may expose a filter that simply strips one occurrence of `../`:
+
+```text
+http://TARGET/index.php?file=....//....//....//....//etc/passwd
+```
+
+**Verify:** Use **Burp Suite Community (Free) → Repeater** to send requests manually. Check the **raw request target** to ensure the encoding is preserved, then compare status codes, response bodies and any error messages with the baseline. A recognizable file response is evidence; a `403`, `404`, or failed request is not proof that LFI is absent. Stop at the minimum evidence needed and never publish sensitive file contents in this repository.
+
+**OSCP exam tool check:** The [OffSec OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) explicitly permits **Burp Free**; it prohibits **Burp Pro**, automatic exploitation tools and AI chatbot assistance during the exam. These examples use manual requests, not automated exploitation.
+
 ## Additional enumeration checks
 
 ### Inspect JavaScript and discover referenced endpoints
@@ -537,6 +571,7 @@ Next step:
 - [ ] If SQLi output is not reflected, compare manual boolean-based and time-based blind SQLi tests.
 - [ ] Manually test identified file parameters for directory traversal/LFI and record sanitized evidence.
 - [ ] If PHP LFI is present, manually check `php://filter` source disclosure and decode only sanitized lab data.
+- [ ] For identified traversal inputs, manually compare standard, URL-encoded, double-encoded and nested path variants.
 - [ ] Save sanitized evidence and next actions.
 
 ## References
