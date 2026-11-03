@@ -4,6 +4,8 @@
 >
 > **Objective:** Map the application's hostnames, routes, technologies, authentication, exposed content and likely weaknesses before attempting exploitation.
 
+**Exam-day file-transfer rule:** [OffSec's official exam guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) prohibits downloading applications, files or source code from exam machines to Kali **unless necessary to compromise the target**. Delete any files downloaded under that exception after completing the objectives. `curl -o` examples that save HTML/JavaScript, downloaded backups and other copied files are **practice-lab examples or conditional exam exceptions**, not routine exam steps. Prefer browser inspection, headers and manual requests when sufficient; keep legitimate local evidence private.
+
 ## Quick navigation
 
 - [Prepare the target and fingerprint the stack](#0-prepare-and-establish-the-correct-url)
@@ -178,7 +180,20 @@ ffuf -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt \
   -rate 20 -of json -o scans/web/subdomains.json
 ```
 
-Replace `example.com` with the **actual in-scope base domain**; change `https` and the port if needed. If `ffuf` is missing, install it with `sudo apt install ffuf`. **Important:** This is HTTP enumeration of DNS-resolvable subdomains, not a raw DNS record brute-force. Unresolvable candidates will fail; if you need DNS-only discovery, use `gobuster dns -d example.com -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt` with the authorized base domain. For hostnames that exist only as virtual hosts on a lab IP (without DNS records), `Host: FUZZ.example.lab` against `http://$IP/` remains the appropriate separate technique.
+Replace `example.com` with the **actual in-scope base domain**; change `https` and the port if needed. If `ffuf` is missing, install it with `sudo apt install ffuf`. **Important:** This is HTTP enumeration of DNS-resolvable subdomains, not a raw DNS record brute-force. Unresolvable candidates will fail; if you need DNS-only discovery, use `gobuster dns -d example.com -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt` with the authorized base domain. For hostnames that exist only as virtual hosts on a lab IP (without DNS records), use **HTTP Host-header fuzzing**, not DNS resolution:
+
+```bash
+# Establish a baseline for a clearly nonexistent virtual host
+curl -i -H "Host: nonexistent-9f31.example.lab" "http://$IP/"
+
+# FUZZ changes the Host header while the destination IP stays fixed
+ffuf -u "http://$IP/" \
+  -H "Host: FUZZ.example.lab" \
+  -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt \
+  -rate 20 -ac -of json -o scans/web/vhosts.json
+```
+
+Replace `example.lab` and the scheme/port with your **actual in-scope lab domain and web port**. Check that `-ac` auto-calibration does not hide genuine matches; compare promising response lengths, redirect destinations and content against the nonexistent-host baseline. Host-header fuzzing is not DNS subdomain discovery: the TCP connection goes to `$IP` throughout. **HTTPS caveat:** setting `Host` does not necessarily set TLS **SNI**; a TLS virtual host may require hostname-based connections with correct local DNS/`/etc/hosts` resolution.
 
 ## 5. Inspect HTTP methods and TLS
 
@@ -230,7 +245,7 @@ printf 'OSCP lab upload test\n' > evidence/web/upload-test.txt
 
 Submit it through the normal application form only if uploads are in scope. Record the server response and whether the file can be retrieved. Do not upload executable payloads during initial enumeration.
 
-To download an in-scope, publicly accessible file found during browsing:
+**Practice lab only / exam compromise-necessary exception:** The following saves a file from the target to Kali. During the exam do **not** use it for routine browsing or evidence gathering; only download a specific file if necessary for compromise and delete it after the objectives. To save an authorized lab file:
 
 ```bash
 curl -fL -o evidence/web/readme.txt "$URL/readme.txt"
@@ -636,7 +651,7 @@ JavaScript bundles often mention API routes, alternate hostnames and application
 grep -Eo 'src="[^"]+\.js[^"]*"' scans/web/index.html
 ```
 
-This simple grep only catches some double-quoted script references; inspect the DOM/network tab for dynamically loaded scripts and relative paths. Fetch **only scripts belonging to the in-scope application** and search locally for routes and keywords:
+This simple grep only catches some double-quoted script references; inspect the DOM/network tab for dynamically loaded scripts and relative paths. **Exam warning:** Saving web page HTML or JavaScript source on Kali counts as file/source retrieval; only do so where necessary to compromise the exam machine and delete the local copy after objectives. In ordinary authorized practice labs, fetch only scripts belonging to the in-scope application and search locally:
 
 ```bash
 curl -fL -o evidence/web/app.js "$URL/static/app.js"
@@ -656,14 +671,14 @@ Check discovered script URLs for a referenced `sourceMappingURL`. Source maps ma
 
 ### Check supported technologies only when identified
 
-For an application identified as WordPress, use a purpose-built scanner only if it is installed and allowed by the lab:
+Only after identifying WordPress, begin with **manual checks of discovered endpoints** (illustrative paths; a 404 is normal):
 
 ```bash
-command -v wpscan
-wpscan --url "$URL" --plugins-detection passive
+curl -i "$URL/wp-json/"
+curl -i "$URL/wp-login.php"
 ```
 
-The command is **WordPress-specific**; do not run it against unrelated frameworks. Passive results can still be incomplete or misleading. CMS plugins, themes and versions require verification.
+Review the public site HTML, headers and **already-discovered** plugin/theme asset paths to identify candidates, then verify versions against vendor advisories. **Exam tool-policy caution:** WPScan is not named among the tools OffSec explicitly permits in the [official exam guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide); do **not** assume a command or feature is exam-approved merely because it is `passive`. Automated exploitation and mass vulnerability scanning are prohibited. Keep the default exam workflow manual and use a tool only when its actual behavior is consistent with the current restrictions.
 
 ### Enumerate parameters and form inputs
 
@@ -863,6 +878,8 @@ Use only checks relevant to discovered functionality; a completed checklist does
 - [ ] Explore manually before automated content discovery.
 - [ ] Inspect robots.txt, sitemap and linked JavaScript.
 - [ ] Discover directories/files with a controlled request rate.
+- [ ] Compare DNS-backed subdomains against HTTP Host-header virtual hosts; inspect HTTPS SNI issues.
+- [ ] Apply OffSec's exam file/source-download restriction to any local copies and delete permitted copies after objectives.
 - [ ] Check for wildcard responses and misleading status codes.
 - [ ] Investigate in-scope virtual hosts.
 - [ ] Review authentication and session behavior.
