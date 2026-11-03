@@ -241,6 +241,19 @@ Investigate potential weaknesses based on observed functionality:
 | User-controlled parameters | Identify input type, server-side handling and expected behavior |
 | Unexpected HTTP methods | Confirm permitted methods non-destructively |
 
+### Check outdated web software and possible CVEs
+
+After fingerprinting a discovered web service, identify its **product and exact version**, then look up known vulnerabilities. Change `80,443` to the actual open web ports:
+
+```bash
+sudo nmap -Pn -sV --version-all -p 80,443 -oA scans/web/service-versions "$IP"
+whatweb "$URL"
+searchsploit --nmap scans/web/service-versions.xml
+searchsploit "PRODUCT VERSION"
+```
+
+Replace `PRODUCT VERSION` with the identified software and version (for example, an Apache httpd version). Check the relevant vendor advisory or [NVD CVE database](https://nvd.nist.gov/) for affected versions, prerequisites and fixes. **A banner or SearchSploit result is only a lead:** verify the installed version, configuration and any backported security patches before calling the service vulnerable. Record the CVE ID, evidence and verification status; do not assume every older version is exploitable.
+
 Research version-specific advisories:
 
 ```bash
@@ -372,7 +385,7 @@ Next step:
 - [ ] Review discovered CMS/framework-specific surfaces where applicable.
 - [ ] Repeat the workflow for every in-scope web port and virtual host.
 - [ ] Review uploads/downloads using harmless test files.
-- [ ] Research relevant advisories and validate potential findings.
+- [ ] Check discovered web service versions against vendor advisories/CVEs; verify findings before claiming a vulnerability.
 - [ ] Save sanitized evidence and next actions.
 
 ## References
