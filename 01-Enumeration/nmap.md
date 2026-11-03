@@ -10,7 +10,7 @@
 
 1. Confirm the target and VPN route.
 2. Scan **all 65,535 TCP ports**.
-3. Scan the **top 100 UDP ports**, expanding as necessary.
+3. Run an initial **top-100 UDP pass**, then decide whether targeted, top-1,000 or full-UDP expansion is needed; the first pass is **not comprehensive**.
 4. Identify versions and run default Nmap scripts.
 5. Select service-specific enumeration and vulnerability checks.
 6. Research versions and CVEs; **manually validate** findings.
@@ -29,7 +29,7 @@ ip route get "$IP"
 ## Step 1 — Find all open TCP ports
 
 ```bash
-sudo nmap -Pn -sS -p- --min-rate 1000 --reason -oA scans/tcp-all "$IP"
+sudo nmap -Pn -sS -p- --reason -oA scans/tcp-all "$IP"
 ```
 
 | Option | Meaning |
@@ -37,9 +37,10 @@ sudo nmap -Pn -sS -p- --min-rate 1000 --reason -oA scans/tcp-all "$IP"
 | `-Pn` | Skip host discovery |
 | `-sS` | TCP SYN scan |
 | `-p-` | Scan TCP ports 1–65535 |
-| `--min-rate 1000` | Request a minimum probe rate; reduce on unreliable links |
 | `--reason` | Show evidence behind port states |
 | `-oA` | Save `.nmap`, `.gnmap`, and `.xml` outputs |
+
+**Do not force `--min-rate` as a default.** Nmap adapts its packet timing; an excessive minimum rate can lose responses on VPNs, rate-limited hosts or congested links. If results look incomplete, check the target/VPN, then rerun with conservative timing (for example `-T2`) rather than assuming all unreported ports are closed. `-p-` covers all TCP port numbers, but no scan can guarantee a response through filtering.
 
 **Interpretation:**
 - `open`: A service responded as listening.
@@ -87,7 +88,9 @@ For a complete UDP scan when time and scope allow:
 sudo nmap -Pn -sU -p- -oA scans/udp-all "$IP"
 ```
 
-UDP scans can be much slower than TCP scans. `open|filtered` means Nmap cannot distinguish an open port from a filtered one; it is **not** a confirmed open port.
+UDP scans can be much slower than TCP scans. **A completed top-100 scan does NOT mean UDP enumeration is complete.** Use the top-100 results as a first pass; check common service-related UDP ports indicated by TCP/AD findings, and broaden to top 1,000 when leads are missing or UDP is relevant. Consider `-sU -p-` only when time, scope and the situation justify it. Keep broad scans scoped to assigned hosts and interpret `open|filtered` as inconclusive, **not** confirmed open. Use `-sV` or service-specific checks to investigate promising ports.
+
+**Decision gate:** Before moving on, record whether UDP coverage was *top 100 only*, *top 1,000*, *targeted*, or *all*. If only top 100 was scanned, keep a visible follow-up task instead of marking UDP finished.
 
 ## Step 3 — Detect TCP services, versions and default script findings
 
@@ -230,7 +233,9 @@ For every suspected issue, record the affected port, product/version, prerequisi
 
 - [ ] Confirm authorized target and routing.
 - [ ] Run a full TCP port scan.
-- [ ] Scan at least the top 100 UDP ports.
+- [ ] Run an initial UDP pass and explicitly record its coverage; top 100 alone is not comprehensive.
+- [ ] Decide whether to scan relevant UDP ports, top 1,000 or all UDP ports based on findings and time.
+- [ ] If TCP results are empty/inconsistent, verify routing, filtering and retry carefully without an aggressive minimum rate.
 - [ ] Save all Nmap outputs.
 - [ ] Extract open TCP ports.
 - [ ] Run `-sC -sV` on discovered TCP ports.
@@ -244,6 +249,8 @@ For every suspected issue, record the affected port, product/version, prerequisi
 ## References
 
 - [Nmap Port Scanning Techniques](https://nmap.org/book/man-port-scanning-techniques.html)
+- [Nmap Port Specification](https://nmap.org/book/man-port-specification.html)
+- [Nmap Timing and Performance](https://nmap.org/book/man-performance.html)
 - [Nmap Service and Version Detection](https://nmap.org/book/man-version-detection.html)
 - [Nmap Scripting Engine](https://nmap.org/book/man-nse.html)
 - [SearchSploit](https://www.exploit-db.com/searchsploit)
