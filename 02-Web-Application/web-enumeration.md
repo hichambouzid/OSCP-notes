@@ -388,6 +388,36 @@ If the application returns recognizable local file content (for example, lines f
 
 **Exam tool check:** [OffSec's OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) explicitly allows **Burp Free**. Manual requests are not automatic exploitation. The guide prohibits commercial Burp Pro, automatic exploitation tools and AI chatbot assistance during the exam. Check the latest guide before exam day.
 
+### LFI — Part 2: PHP wrappers (`php://filter`)
+
+Use this **only on authorized PHP lab targets** where a file parameter may be used in a PHP `include` or `require` call. The `php://filter` wrapper can apply a conversion to file content before it is included. Encoding PHP source as Base64 helps display the source rather than execute it.
+
+**1. Establish a baseline** with an existing in-scope page:
+
+```text
+http://TARGET/index.php?page=home.php
+```
+
+**2. Try reading that page through the Base64 filter:**
+
+```text
+http://TARGET/index.php?page=php://filter/convert.base64-encode/resource=home.php
+```
+
+The part after `resource=` is the local file path. Adjust it only to match an in-scope file you have identified. A successful response may contain a Base64 string beginning with `PD9waHA` (often the encoding of `<?php`).
+
+**3. Decode an extracted Base64 value locally:**
+
+```bash
+printf '%s' 'PASTE_BASE64_HERE' | base64 -d
+```
+
+Copy **just the encoded string**, not the surrounding HTML. Inspect the decoded output locally; do not post source code, credentials or secrets in this public repository.
+
+**Troubleshooting:** The application may append its own suffix (such as `.php`), block wrappers, enforce path restrictions, or return a rendered/encoded HTML response. A failed attempt does not rule out LFI, and a Base64-looking response alone is not proof of PHP source disclosure. Compare with the baseline and preserve sanitized evidence.
+
+**Exam tool check:** Manual requests through **Burp Suite Community (Free) → Repeater** are compatible with the [OffSec OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide), which explicitly allows Burp Free. The `base64` command performs local decoding, not automatic exploitation. The guide prohibits automatic exploitation tools and AI chatbot assistance during the exam. Recheck the current rules before exam day.
+
 ## Additional enumeration checks
 
 ### Inspect JavaScript and discover referenced endpoints
@@ -506,6 +536,7 @@ Next step:
 - [ ] If SQLi is confirmed, manually determine UNION column count and reflected output columns.
 - [ ] If SQLi output is not reflected, compare manual boolean-based and time-based blind SQLi tests.
 - [ ] Manually test identified file parameters for directory traversal/LFI and record sanitized evidence.
+- [ ] If PHP LFI is present, manually check `php://filter` source disclosure and decode only sanitized lab data.
 - [ ] Save sanitized evidence and next actions.
 
 ## References
