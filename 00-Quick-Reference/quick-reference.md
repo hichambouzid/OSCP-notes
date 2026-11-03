@@ -119,6 +119,7 @@ Use detailed [Linux](../04-Privilege-Escalation/linux-privesc.md) and [Windows](
 - Latest [OffSec OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) always overrides notes.
 - No LLM/chatbot use during the exam. No SQLmap/SQLninja, automatic exploitation, mass vulnerability scanners, commercial Burp Pro or spoofing.
 - Metasploit modules and Meterpreter: one selected target; published exceptions for msfvenom and multi/handler.
+- File transfers: do not download target files/apps/source to Kali unless needed to compromise the exam host; delete permitted downloads after objectives.
 - Proof files: control panel before exam end **and** original-location cat/type in an interactive shell with target IP in screenshot.
 - Report: professional reproducible PDF in an unencrypted 7z; confirm submission and checksum.
 
