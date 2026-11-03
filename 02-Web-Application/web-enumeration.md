@@ -485,6 +485,48 @@ Replace `http://TARGET/upload` and `file` with the actual in-scope endpoint and 
 
 **OSCP exam tool check:** [OffSec's OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) explicitly permits **Burp Free**, but prohibits **Burp Pro**, automatic exploitation tools and AI chatbot assistance during the exam. `curl` here is used for a manual HTTP request, not exploitation automation. Recheck the rules before the exam.
 
+### File Upload — Part 2: file extension and Content-Type bypass testing
+
+Use this **only in an authorized OSCP lab** after completing Part 1. Identify a working upload request, save its **baseline response**, then change **one field per test** in **Burp Suite Community (Free) → Repeater**. Keep the file's contents harmless so you can evaluate the validation behavior without running code.
+
+**1. Test how the server validates extensions.** Create a harmless marker file:
+
+```bash
+printf 'OSCP upload check\n' > upload-check.txt
+```
+
+In the captured multipart request, change only the `filename=` value while keeping the file contents and `Content-Type` unchanged. Example candidate names to test individually:
+
+```text
+upload-check.php
+upload-check.phtml
+upload-check.php5
+upload-check.php.jpg
+upload-check.jpg.php
+```
+
+These extensions and double extensions may be interpreted differently by filters and web servers. They are **test cases**, not guaranteed bypasses. Don't assume an uploaded file executes merely because its name contains `.php`.
+
+**2. Test client-supplied MIME type (`Content-Type`).** For the *same* harmless test file and filename, modify just the multipart part header in Burp Repeater:
+
+```http
+Content-Disposition: form-data; name="file"; filename="upload-check.php"
+Content-Type: image/png
+```
+
+Or send a single manual request using `curl` after identifying the real endpoint and field name:
+
+```bash
+curl -i -F "file=@upload-check.txt;filename=upload-check.php;type=image/png" \
+  "http://TARGET/upload"
+```
+
+The bytes remain plain text even when the declared MIME type is `image/png`. An application that trusts that header alone may accept an unexpected file, but this **does not by itself confirm code execution**. A correctly configured server may inspect the actual file bytes, normalize names, change extensions or store files outside the web root.
+
+**3. Validate the outcome.** Compare the HTTP status **and response body** for each test, and note any server-assigned filename, storage path or retrieval URL. If a harmless file is retrievable, inspect how it is served (download vs. inline content), without uploading executable payloads at this stage. Stop after establishing the minimal evidence needed, and remove test files when permitted.
+
+**OSCP exam tool check:** [OffSec's OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) explicitly permits **Burp Free** and prohibits **Burp Pro**, automatic exploitation tools and AI chatbot assistance during the exam. `curl` is used here only for one manually chosen HTTP request. Recheck the latest rules before exam day.
+
 ## Additional enumeration checks
 
 ### Inspect JavaScript and discover referenced endpoints
@@ -606,6 +648,7 @@ Next step:
 - [ ] If PHP LFI is present, manually check `php://filter` source disclosure and decode only sanitized lab data.
 - [ ] For identified traversal inputs, manually compare standard, URL-encoded, double-encoded and nested path variants.
 - [ ] Identify upload restrictions with a harmless test file; document storage and retrieval behavior.
+- [ ] Test extension and multipart Content-Type validation manually using harmless upload files; verify storage and retrieval.
 - [ ] Save sanitized evidence and next actions.
 
 ## References
