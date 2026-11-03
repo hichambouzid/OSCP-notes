@@ -577,6 +577,42 @@ Then verify context with `whoami`, `id`, and `hostname`. This shell initially ru
 
 **OSCP exam tool check:** The [official OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) explicitly permits Burp Free and allows `msfvenom` on all targets; Metasploit modules and **Meterpreter** are restricted to one target. The `php/reverse_php` payload used above is **not Meterpreter**. `nc` is a manual listener, not an automatic exploitation tool. Do not use AI chatbots during the actual exam. Exam proof files must be read in an **interactive shell** with `cat` or `type` from their original location—**not through a web shell**.
 
+### OS Command Injection — Part 1: manual detection
+
+Use these checks **only on authorized OSCP lab targets**. Look for inputs that might be passed to operating-system commands (for example, network diagnostic forms, hostname lookups or file-processing features). A user-controlled parameter is **not necessarily** command-injectable.
+
+**1. Establish a baseline.** In a discovered diagnostic feature, submit its normal input and record the response:
+
+```text
+127.0.0.1
+```
+
+**2. Test common shell operators manually**, one request at a time in **Burp Suite Community (Free) → Repeater**. These examples assume a Linux/Unix shell, and that the application passes the input into a shell command:
+
+```bash
+127.0.0.1; echo OSCP_CMD_TEST
+127.0.0.1 && echo OSCP_CMD_TEST
+127.0.0.1 | echo OSCP_CMD_TEST
+```
+
+- `;` separates commands, whether or not the preceding command succeeds.
+- `&&` runs the following command only if the previous one succeeds.
+- `|` sends the previous command's output to the next command's standard input; the `echo` marker here does not need that input.
+
+If `OSCP_CMD_TEST` appears **only after the test** and is not merely reflected user input, investigate whether the server actually executed the extra command. Compare response bodies, status codes and the original baseline. Do not confuse client-side reflection with execution.
+
+**3. If output is hidden, test a short timing difference** (Linux/Unix example):
+
+```bash
+127.0.0.1; sleep 5
+```
+
+Compare with the normal request multiple times. A delay by itself is **not proof**: network jitter, backend load or rate limiting can produce false positives. Stop after a few controlled tests.
+
+**4. Handle URL encoding and document the result.** For a query-string request, special characters may need URL encoding (for example, `;` → `%3B`, space → `%20`, `&` → `%26`). Preserve the intended request in Burp Repeater. Record the parameter, baseline, test payload, response difference and confirmation status. The exact syntax differs on Windows and when no shell is involved.
+
+**OSCP exam tool check:** The [official OffSec OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) explicitly allows **Burp Free**. These are individual manual tests, not automated exploitation. The guide prohibits Burp Pro, automatic exploitation tools and AI chatbots during the actual exam.
+
 ## Additional enumeration checks
 
 ### Inspect JavaScript and discover referenced endpoints
@@ -700,6 +736,7 @@ Next step:
 - [ ] Identify upload restrictions with a harmless test file; document storage and retrieval behavior.
 - [ ] Test extension and multipart Content-Type validation manually using harmless upload files; verify storage and retrieval.
 - [ ] After confirming PHP execution, obtain and stabilize an authorized reverse shell; record the shell context.
+- [ ] Manually test relevant input parameters for OS command injection using output markers or controlled timing checks.
 - [ ] Save sanitized evidence and next actions.
 
 ## References
