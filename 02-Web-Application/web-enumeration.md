@@ -144,7 +144,7 @@ curl -i "http://app.example.lab/"
 
 Replace `app.example.lab` with a hostname grounded in your lab. Do not invent or scan unrelated domains.
 
-For authorized virtual-host discovery, test the `Host` header against the assigned IP. Kali commonly has SecLists at `/usr/share/seclists/` **if the `seclists` package is installed**. Check the actual path first:
+For **DNS-backed subdomain discovery**, place `FUZZ` in the **URL hostname**, not in the HTTP `Host` header. This makes ffuf resolve each candidate subdomain and send a request to it. Kali commonly has SecLists at `/usr/share/seclists/` **if the `seclists` package is installed**. Check the actual path first:
 
 ```bash
 ls /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt
@@ -157,13 +157,15 @@ sudo apt update
 sudo apt install seclists
 ```
 
-Then, for an assigned domain such as `example.lab`, run:
+Then run ffuf with `FUZZ` in the subdomain position:
 
 ```bash
-ffuf -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -u "http://$IP/" -H "Host: FUZZ.example.lab" -rate 20 -of json -o scans/web/vhosts.json
+ffuf -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt \
+  -u "https://FUZZ.example.com/" \
+  -rate 20 -of json -o scans/web/subdomains.json
 ```
 
-Replace `example.lab` with the **actual in-scope base domain** and adjust the URL scheme/port to the discovered service. If `ffuf` is missing, install it with `sudo apt install ffuf`. **Compare a random nonexistent Host header first** and filter by response size/words only after measuring the default response; some servers serve identical pages for unknown hosts.
+Replace `example.com` with the **actual in-scope base domain**; change `https` and the port if needed. If `ffuf` is missing, install it with `sudo apt install ffuf`. **Important:** This is HTTP enumeration of DNS-resolvable subdomains, not a raw DNS record brute-force. Unresolvable candidates will fail; if you need DNS-only discovery, use `gobuster dns -d example.com -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt` with the authorized base domain. For hostnames that exist only as virtual hosts on a lab IP (without DNS records), `Host: FUZZ.example.lab` against `http://$IP/` remains the appropriate separate technique.
 
 ## 5. Inspect HTTP methods and TLS
 
