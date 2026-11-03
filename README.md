@@ -44,7 +44,8 @@ A practical, **exam-focused study reference** for authorized OSCP labs and penet
 
 ~~~bash
 export IP=192.168.56.101     # Replace with assigned target
-mkdir -p scans evidence
+mkdir -p "$HOME/oscp-local/$IP"/{scans,evidence}
+cd "$HOME/oscp-local/$IP"    # Keep private lab data outside public Git
 ip route get "$IP"
 sudo nmap -Pn -sS -p- --reason -oA scans/tcp-all "$IP"
 # See Quick Reference for extracting every open TCP port before -sC -sV
