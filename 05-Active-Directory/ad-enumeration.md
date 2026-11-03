@@ -23,10 +23,16 @@ export DC=192.168.56.10
 export DOMAIN=example.lab
 dig @"$DC" _ldap._tcp.dc._msdcs."$DOMAIN" SRV
 dig @"$DC" "$DOMAIN" A
+
+# Full TCP port discovery on this assigned domain controller
+mkdir -p scans/ad
+sudo nmap -Pn -sS -p- --reason -oA scans/ad/dc-tcp-all "$DC"
+
+# Targeted follow-up only: use ports actually found in the full scan
 sudo nmap -Pn -sV -p 53,88,135,139,389,445,464,636,3268,3269 "$DC"
 ~~~
 
-If DNS cannot resolve lab hostnames, check VPN DNS and known DC FQDN before editing your resolver. Correct hostname and time are important for Kerberos.
+The `-p 53,88,...` command is a **common AD-port example**, not complete enumeration; the full TCP scan above is mandatory for **every assigned AD machine**, not only the DC. For each machine, run service detection on **all its discovered open TCP ports** using the extraction procedure in [Nmap Enumeration](../01-Enumeration/nmap.md). Consider relevant UDP ports (especially DNS/Kerberos/NTP) and expand UDP coverage when the initial top-100 pass is insufficient; no fixed list rules out services elsewhere. If DNS cannot resolve lab hostnames, check VPN DNS and known DC FQDN before editing your resolver. Correct hostname and time are important for Kerberos.
 
 ## 2. Use supplied credentials to map identity
 
@@ -120,6 +126,8 @@ For visual relationship analysis, tools such as BloodHound may be useful in trai
 
 ## OSCP checklist
 
+- [ ] Scanned all 65,535 TCP ports on **each** in-scope AD host, not merely the DC or common AD ports.
+- [ ] Ran version/service detection on every discovered open TCP port and recorded UDP coverage.
 - [ ] Verified DC, domain FQDN, DNS and time.
 - [ ] Starting credentials tested only against in-scope targets.
 - [ ] Users, groups, computers, SPNs and shares documented.
