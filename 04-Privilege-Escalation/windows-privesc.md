@@ -52,11 +52,11 @@ Get-CimInstance Win32_Service | Select-Object Name,StartName,PathName,State,Star
 
 ~~~cmd
 schtasks /query /fo LIST /v
-wmic product get name,version
 dir "C:\Program Files"
+reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
 ~~~
 
-The WMIC and Win32_Product paths may be unavailable or have side effects on some systems; prefer the following read-only checks for installed apps:
+Avoid Win32_Product inventory queries because they can have installer side effects. Prefer the following read-only checks for installed apps:
 
 ~~~powershell
 Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Select-Object DisplayName,DisplayVersion,InstallLocation
