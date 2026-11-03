@@ -46,11 +46,12 @@ A practical, **exam-focused study reference** for authorized OSCP labs and penet
 export IP=192.168.56.101     # Replace with assigned target
 mkdir -p scans evidence
 ip route get "$IP"
-sudo nmap -Pn -sS -p- -oA scans/tcp-all "$IP"
-sudo nmap -Pn -sU --top-ports 100 -oA scans/udp-top100 "$IP"
+sudo nmap -Pn -sS -p- --reason -oA scans/tcp-all "$IP"
+# See Quick Reference for extracting every open TCP port before -sC -sV
+sudo nmap -Pn -sU --top-ports 100 -oA scans/udp-top100 "$IP"  # First UDP pass ONLY
 ~~~
 
-Then use [service-specific enumeration](01-Enumeration/service-enumeration.md) and the [quick reference](00-Quick-Reference/quick-reference.md) to decide what to inspect. `-Pn` skips host discovery; it does **not** prove a host is online.
+Then use the [Quick Reference](00-Quick-Reference/quick-reference.md) to **extract all open TCP ports and scan every detected service**, followed by [Service-Specific Enumeration](01-Enumeration/service-enumeration.md). The UDP top-100 pass is **not exhaustive**: expand to service-driven ports, top 1,000, or all UDP when warranted and record the coverage. `-Pn` skips host discovery; it does **not** prove a host is online. Default Nmap timing avoids forcing a potentially inaccurate minimum packet rate.
 
 ## OSCP+ exam compatibility — checked November 3, 2026
 
@@ -67,6 +68,7 @@ The official guide updated October 21, 2026 notes that **scaled scoring begins f
 
 ## Repository hygiene
 
+- During the exam, **do not download target files/applications/source to Kali** unless necessary to compromise the target; remove allowed downloads after completing objectives, per the [official guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide).
 - Never commit real passwords, hashes, private keys, tokens, target proof files or proprietary exam screenshots.
 - Keep raw target-specific evidence in **private, local** notes.
 - A banner, CVE result, open port or unusual response is **not** proof of a vulnerability.
