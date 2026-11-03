@@ -340,6 +340,32 @@ Database functions differ: for **Microsoft SQL Server**, examples include `@@VER
 
 **Record:** injectable URL/parameter, baseline response, working column count, reflected column, detected database, and sanitized response evidence. Manual testing with Burp Free is permitted under the [official OffSec OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide); automatic exploitation tools such as SQLmap and SQLninja are prohibited.
 
+### Manual SQL injection (SQLi) — Part 3: blind testing
+
+Use blind SQLi tests on **authorized lab targets** when the query output is not reflected in the HTTP response. Start with the baseline and change **one parameter at a time**. The examples assume a **single-quoted string parameter** and MySQL/MariaDB-style comments (`-- -`); adapt the syntax to the actual input and database.
+
+**1. Boolean-based blind SQLi:** Compare a condition that is true with one that is false:
+
+```sql
+' AND 1=1-- -
+' AND 1=2-- -
+```
+
+Send each payload manually using **Burp Suite Community (Free) → Repeater**. Compare the response status, page content, word count and redirects. A repeatable difference between true and false requests may indicate injection even when SQL errors and query results are not shown. Verify against the original request and normal application behavior.
+
+**2. Time-based blind SQLi:** If no visible difference exists, and the backend appears to be **MySQL/MariaDB**, compare a conditional delay against its false control:
+
+```sql
+' AND IF(1=1,SLEEP(5),0)=0-- -
+' AND IF(1=2,SLEEP(5),0)=0-- -
+```
+
+The first condition requests a roughly 5-second delay if the expression is evaluated; the second should not. Send only a few manual requests and repeat to rule out network jitter, server load or caching. These payloads are **database-specific**: SQL Server, PostgreSQL and SQLite use different approaches, and timeouts or query optimization can affect results.
+
+**Record:** the parameter, baseline, true/false request and response differences, repeatable timing observations, and the DBMS assumed. Neither a single slow response nor a single content change proves SQLi.
+
+**OSCP exam tool check:** [OffSec's OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) explicitly permits **Burp Free**; it prohibits automatic exploitation tools including **SQLmap** and **SQLninja**, as well as AI chatbot assistance during the exam. Use manual Repeater requests, not prohibited automation.
+
 ## Additional enumeration checks
 
 ### Inspect JavaScript and discover referenced endpoints
@@ -456,6 +482,7 @@ Next step:
 - [ ] Check discovered web service versions against vendor advisories/CVEs; verify findings before claiming a vulnerability.
 - [ ] Manually test discovered database-backed inputs for possible SQLi and compare true/false responses.
 - [ ] If SQLi is confirmed, manually determine UNION column count and reflected output columns.
+- [ ] If SQLi output is not reflected, compare manual boolean-based and time-based blind SQLi tests.
 - [ ] Save sanitized evidence and next actions.
 
 ## References
