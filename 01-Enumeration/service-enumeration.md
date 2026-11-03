@@ -4,12 +4,16 @@
 >
 > **Scope:** Assigned OSCP targets and authorized labs only. Use discovered ports, not assumptions about default ports.
 
+**Exam-day accuracy rule:** Complete the [full TCP scan and discovered-port service detection](./nmap.md) **before** relying on any section below. All fixed port numbers in this guide illustrate common services; a service can run on **any discovered port**. UDP top 100 is only a first pass: expand to relevant specific ports, top 1,000 or a full UDP scan when warranted.
+
+**OffSec exam file-transfer restriction:** [The official exam guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) forbids downloading applications, files or source code from exam targets to Kali **unless necessary to compromise the exam machine**; in that case delete those local downloads after completing the exam objectives. Commands containing `get`, `mget`, `scp`, `sftp get`, `curl -o`, or copying from mounted shares are **practice-lab examples, not routine exam-day instructions**. Prefer listing and in-place inspection on the target when appropriate; keep any permitted evidence private.
+
 **Previous:** [Nmap Enumeration](./nmap.md)
 
 ## Workflow
 
 1. Review `scans/tcp-services.nmap` and UDP results.
-2. Make a list of each open port and identified service.
+2. Make a list of **every** open TCP port and each promising UDP result; do not silently discard nonstandard ports.
 3. Follow the relevant service section below.
 4. Save outputs, URLs, shares, usernames, versions and evidence.
 5. Research possible weaknesses and verify them manually.
@@ -35,7 +39,7 @@ whatweb "http://$IP/"
 sudo nmap -Pn -sV -p 80,443 --script http-title,http-headers -oA scans/http-info "$IP"
 ```
 
-Only include ports you actually found. `-k` skips TLS certificate validation for lab inspection; do not treat it as evidence that the certificate is trustworthy.
+The `-p 80,443` list above is an **illustrative targeted check**, not a replacement for full-TCP discovery or scanning all discovered web ports (including 8080, 8443 and nonstandard ports). Replace it with ports where you actually identified HTTP/HTTPS. `-k` skips TLS certificate validation for lab inspection; do not treat it as evidence that the certificate is trustworthy.
 
 Look for:
 - Server, framework, CMS and application version clues
@@ -62,7 +66,7 @@ The cipher enumeration script makes multiple handshakes; run only when permitted
 
 **Potential findings:** exposed sensitive files, outdated components, missing access controls, insecure configuration. Confirm with actual evidence; banners alone are insufficient.
 
-**Next:** Record web findings here and move to the Web Application section when its documentation has been added to the repository.
+**Next:** Record each web service's URL (including port and hostname), then follow [Web Enumeration](../02-Web-Application/web-enumeration.md).
 
 ### Practical web access, browsing and downloads
 
@@ -75,7 +79,7 @@ curl -k -i "https://$IP:443/"
 
 In a browser, open `http://TARGET_IP:PORT/` and follow visible links. For a named virtual host provided by the lab, add the assigned hostname to `/etc/hosts` and browse by name rather than IP.
 
-To inspect an HTTP response and download a publicly accessible file:
+**Lab practice / permitted-compromise exception only:** Inspect a response and, only when allowed under OffSec's file-transfer rule above, save a discovered file locally:
 
 ```bash
 curl -I "http://$IP:80/"
@@ -199,9 +203,9 @@ ftp> bye
 | `mget *.txt` | Download matching files (may prompt for each) |
 | `bye` | Disconnect |
 
-### Inspect remote files and download evidence
+### Inspect remote FTP files — practice downloads only
 
-FTP is a file-transfer protocol: the usual way to **read file contents** is to download the file to Kali and inspect it locally. Directory listings show filenames and metadata, not the full contents of a file.
+**Exam warning:** FTP `get` and `mget` transfer files from the exam host to Kali, so do **not** use them merely for general inspection. Only download a specific file if necessary to compromise the machine, and delete the local copy after the objectives. FTP `ls` and `dir` are useful non-download first steps. In ordinary authorized labs, downloading specifically permitted files may be appropriate.
 
 On Kali, before opening the FTP client:
 
@@ -295,7 +299,7 @@ less ./notes.txt
 exit
 ```
 
-To copy a file that the account is allowed to read, from **your Kali terminal**:
+**Practice lab / necessary-to-compromise exception only:** `scp` downloads a target file to Kali; do **not** run this during the exam unless the official exception applies, and delete the copy after objectives. If appropriate, inspect the file in place through the authorized shell. From your Kali terminal:
 
 ```bash
 mkdir -p evidence/ssh
@@ -308,7 +312,7 @@ Replace usernames, paths and ports with actual values. `scp -P` uses an uppercas
 sftp -P 22 "USERNAME@$IP"
 ```
 
-Then use `pwd`, `ls`, `cd`, `lcd evidence/ssh`, `get notes.txt`, and `bye`. Do not download private material outside the lab scope.
+Then use `pwd`, `ls`, `cd`, and `bye` for navigation; `get notes.txt` is a **download** and subject to the same exam restriction as `scp`. Do not download private material outside the lab scope.
 
 
 ## 5. DNS — Domain Name System (53 TCP/UDP)
@@ -456,7 +460,7 @@ ls -lah /mnt/oscp-nfs
 find /mnt/oscp-nfs -maxdepth 2 -type f 2>/dev/null
 ```
 
-Replace `/export/share` with a real exported path. Copy an authorized readable file locally and unmount afterward:
+Replace `/export/share` with a real exported path. **Exam warning:** `cp` from a mounted remote export to Kali is a download. Do not perform it unless required to compromise the machine, then delete the local copy after the objective. For ordinary authorized practice labs, an explicitly permitted example is:
 
 ```bash
 mkdir -p evidence/nfs
@@ -583,7 +587,9 @@ Next action:
 
 ## OSCP checklist
 
-- [ ] Review every open TCP port and interesting UDP result.
+- [ ] Review **every** confirmed open TCP port, including nonstandard ports, and record the UDP coverage/expansion decision.
+- [ ] Do not treat fixed examples such as `-p 80,443` as complete scans.
+- [ ] Apply the exam file-download exception strictly; delete any permitted local downloads after objectives.
 - [ ] Confirm the real service, even on nonstandard ports.
 - [ ] Enumerate web applications, including hostnames and virtual hosts.
 - [ ] Inspect accessible SMB shares and permissions.
