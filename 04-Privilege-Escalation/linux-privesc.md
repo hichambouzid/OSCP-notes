@@ -46,6 +46,8 @@ find / -xdev -type f -perm -2000 2>/dev/null
 getcap -r / 2>/dev/null
 ~~~
 
+`-xdev` is a speed/scope optimization: it **excludes other mounted filesystems**. Check `findmnt` or `mount`, and inspect additional **in-scope** mounted locations (for example `/mnt`, `/opt`, or user home mounts) separately when relevant, rather than assuming the initial search was exhaustive.
+
 Investigate unexpected custom executables and unusually powerful capabilities (for example, CAP_SETUID or CAP_DAC_READ_SEARCH). The presence of a SUID binary **alone** is not a vulnerability. Inspect version, owner, permissions and behavior.
 
 ## 4. Writable files, directories and configuration
@@ -111,7 +113,7 @@ If no Python or Bash is present, work with the shell you have; avoid assuming an
 ## OSCP checklist
 
 - [ ] Identity, groups, OS and kernel documented.
-- [ ] Sudo, SUID/SGID and capabilities reviewed.
+- [ ] Sudo, SUID/SGID and capabilities reviewed, with relevant additional mounts checked where `-xdev` skipped them.
 - [ ] Scheduled tasks, services, processes and writable paths reviewed.
 - [ ] Local listeners and accessible application configuration reviewed.
 - [ ] Candidate misconfiguration manually verified.
