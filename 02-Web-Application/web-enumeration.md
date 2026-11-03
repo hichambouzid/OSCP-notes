@@ -452,6 +452,39 @@ http://TARGET/index.php?file=....//....//....//....//etc/passwd
 
 **OSCP exam tool check:** The [OffSec OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) explicitly permits **Burp Free**; it prohibits **Burp Pro**, automatic exploitation tools and AI chatbot assistance during the exam. These examples use manual requests, not automated exploitation.
 
+### File Upload — Part 1: detection and restrictions
+
+Use **only on authorized OSCP lab applications**. Locate upload features such as profile pictures, document attachments or administration forms. Before investigating bypasses, determine how the application handles an ordinary **harmless** file.
+
+**1. Identify an upload form.** Note its action URL, HTTP method, multipart field name, authentication requirements and permitted formats. Capture one normal request using **Burp Suite Community (Free)**.
+
+**2. Create a harmless text file and upload it through the application's normal form:**
+
+```bash
+printf 'OSCP upload test\n' > oscp-test.txt
+```
+
+If the form's endpoint and field name are known, send the same simple request manually with `curl`:
+
+```bash
+curl -i -X POST \
+  -F "file=@oscp-test.txt;type=text/plain" \
+  "http://TARGET/upload"
+```
+
+Replace `http://TARGET/upload` and `file` with the actual in-scope endpoint and multipart field name. Login sessions, anti-CSRF tokens and additional fields may be required; an illustrative command may fail without them.
+
+**3. Inspect upload restrictions and handling.** Record:
+
+- Which file extensions and declared `Content-Type` values are accepted or rejected.
+- Whether the server renames files, changes extensions or checks their content.
+- Where the uploaded file is stored and whether a URL is returned.
+- Whether the file can be retrieved, and whether it is displayed or downloaded.
+
+**Interpretation:** A successful upload is **not automatically a vulnerability**. Confirm what is stored and how it is served. Use only benign files at this stage; do not upload executable payloads or attempt extension bypasses yet. Record sanitized request/response evidence, and remove test files if the lab provides a safe way to do so.
+
+**OSCP exam tool check:** [OffSec's OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) explicitly permits **Burp Free**, but prohibits **Burp Pro**, automatic exploitation tools and AI chatbot assistance during the exam. `curl` here is used for a manual HTTP request, not exploitation automation. Recheck the rules before the exam.
+
 ## Additional enumeration checks
 
 ### Inspect JavaScript and discover referenced endpoints
@@ -572,6 +605,7 @@ Next step:
 - [ ] Manually test identified file parameters for directory traversal/LFI and record sanitized evidence.
 - [ ] If PHP LFI is present, manually check `php://filter` source disclosure and decode only sanitized lab data.
 - [ ] For identified traversal inputs, manually compare standard, URL-encoded, double-encoded and nested path variants.
+- [ ] Identify upload restrictions with a harmless test file; document storage and retrieval behavior.
 - [ ] Save sanitized evidence and next actions.
 
 ## References
