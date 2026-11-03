@@ -5,15 +5,36 @@
 ## Start a target
 
 ~~~bash
-export IP=192.168.56.101
-mkdir -p scans evidence
+export IP=192.168.56.101  # Replace with your assigned host
+mkdir -p scans evidence    # Work in a private lab folder, not a public Git checkout
 ip route get "$IP"
-sudo nmap -Pn -sS -p- -oA scans/tcp-all "$IP"
-sudo nmap -Pn -sV -sC -p 22,80,445 -oA scans/tcp-services "$IP"
+
+# Full TCP first: ports 1–65535 (no forced minimum probe rate)
+sudo nmap -Pn -sS -p- --reason -oA scans/tcp-all "$IP"
+
+# Extract ALL confirmed open TCP ports from this scan
+PORTS=$(grep -oE '[0-9]+/open/tcp' scans/tcp-all.gnmap | cut -d/ -f1 | sort -nu | paste -sd, -)
+if [ -n "$PORTS" ]; then
+  sudo nmap -Pn -sC -sV -p "$PORTS" -oA scans/tcp-services "$IP"
+else
+  echo "No open TCP ports found: check VPN, IP, filtering and scan accuracy."
+fi
+
+# UDP FIRST PASS ONLY: not a complete UDP audit
 sudo nmap -Pn -sU --top-ports 100 -oA scans/udp-top100 "$IP"
 ~~~
 
-The service-port list is a **placeholder**: use ports actually discovered in the full scan. Scan only in-scope systems.
+**Do not skip discovered ports:** never copy a fixed port list such as `22,80,445` into service detection unless those are actually your only open TCP ports. The extraction above reads Nmap's real `.gnmap` output.
+
+**UDP escalation decision:** top 100 is a quick starting point, **not enough to rule out other UDP services**. Examine UDP leads from TCP/AD discovery and, if needed, run:
+
+~~~bash
+sudo nmap -Pn -sU --top-ports 1000 -oA scans/udp-top1000 "$IP"
+# Full UDP coverage, when time and scope justify it:
+sudo nmap -Pn -sU -p- -oA scans/udp-all "$IP"
+~~~
+
+`open|filtered` does not confirm an open UDP port. Use `-sV` or a reviewed service-specific probe to validate. If TCP or UDP results are inconsistent, recheck routing and retry conservatively before moving on. **Only scan in-scope systems.**
 
 ## When a port is open
 
@@ -106,7 +127,9 @@ See [Exam Methodology](../08-Exam-Workflow/exam-methodology.md) and [Reporting](
 ## Last-minute checklist
 
 - [ ] Target scope / route / starting identity noted.
-- [ ] All TCP ports checked, UDP considered.
+- [ ] All 65,535 TCP ports scanned; service detection on **all discovered** TCP ports.
+- [ ] UDP top-100 initial pass completed and expansion decision explicitly recorded.
+- [ ] Empty or suspicious scan results checked for filtering, routing and packet-loss issues.
 - [ ] Every discovered service has a next action or ruled-out reason.
 - [ ] Candidate vulnerability manually validated.
 - [ ] Foothold and effective privilege recorded.
