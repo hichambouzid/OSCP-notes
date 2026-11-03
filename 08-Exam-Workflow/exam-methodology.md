@@ -41,8 +41,8 @@ Exit the script session when finished. Logs may contain credentials or target-sp
 ## 4. Repeatable methodology per target
 
 1. Confirm scope, IP, VPN route and known credentials.
-2. Start host discovery and complete an all-TCP-port scan of the assigned target.
-3. Identify each TCP/UDP service and enumerate it before guessing exploit paths.
+2. Complete a **full TCP 1–65535 scan of every assigned target**, including each AD machine. Avoid forcing a high `--min-rate` as a default; verify suspicious or empty results.
+3. Extract **all** open TCP ports for `-sC -sV` detection. Run a UDP initial pass, then explicitly decide whether to expand targeted ports, top 1,000 or full UDP; **top 100 does not complete UDP enumeration**. Enumerate the actual services, not assumed standard ports.
 4. For web applications, investigate hosts, paths, parameters, auth and user roles.
 5. Research a candidate CVE only when the service/version/preconditions match.
 6. Choose a single verified entry path; record every step to access.
@@ -50,6 +50,8 @@ Exit the script session when finished. Logs may contain credentials or target-sp
 8. Enumerate operating system, effective rights, services and misconfigurations.
 9. Validate privilege escalation and record the elevated account context.
 10. Return to untested services or the next assigned target.
+
+**Exam file-transfer restriction:** OffSec forbids downloading applications, files or source code from exam targets to Kali **except when necessary to compromise the machine**; permitted local copies must be deleted after objectives. Do not treat FTP `get`, `scp`, downloading JavaScript/source, or copying from NFS/SMB as a routine exam step. Refer to the [official guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide).
 
 **Cross-references:** [Nmap](../01-Enumeration/nmap.md), [Services](../01-Enumeration/service-enumeration.md), [Web](../02-Web-Application/web-enumeration.md), [Initial Access](../03-Initial-Access/initial-access.md), [Linux](../04-Privilege-Escalation/linux-privesc.md), [Windows](../04-Privilege-Escalation/windows-privesc.md), [AD](../05-Active-Directory/ad-enumeration.md).
 
@@ -100,6 +102,8 @@ Full target points require an appropriate elevated shell; consult the guide for 
 
 - [ ] No prohibited tools or AI assistance used.
 - [ ] All target scopes and Metasploit limitations respected.
+- [ ] Full TCP coverage and service detection on every assigned host; UDP coverage explicitly considered.
+- [ ] Exam file-download restriction respected and any necessary local copies removed after objectives.
 - [ ] Evidence captured before leaving each host.
 - [ ] Proof values submitted through control panel before exam ends.
 - [ ] Interactive-shell proof screenshots show target IP.
