@@ -124,6 +124,30 @@ This output is illustrative; do not assume these services exist on your target.
 
 **Next action:** Note each open port, identified service, possible version, and any unusual script output. Versions may be hidden, misleading, or backported.
 
+### Targeted Windows / SMB / WinRM / RPC service scan
+
+After the **full TCP discovery** and service enumeration above, use this **optional targeted follow-up** when these ports were found or Windows/AD evidence justifies checking them. This is **not a replacement** for scanning all discovered open TCP ports: a service could be listening anywhere.
+
+```bash
+sudo nmap -Pn -n -sS -sC -sV \
+  --version-light \
+  -T3 \
+  --max-rate 100 \
+  --max-retries 2 \
+  --stats-every 10s \
+  --reason \
+  --open -v \
+  -p 135,139,445,1978,5985,5986,47001,49664-49667,49670,49673,49680 \
+  -oN scan_results.txt \
+  "$IP"
+```
+
+Replace `$IP` with the **assigned target** (for example, set `IP=192.168.230.10` before running). The ports are the **specific set you selected**; several are commonly associated with SMB, Windows RPC or WinRM, but the **actual service must be identified**, especially on `1978` and high-numbered ports. Nmap saves the human-readable output to `scan_results.txt` in your current working directory; run from your private per-target workspace.
+
+**Interpret the flags carefully:** `--version-light` speeds up version detection but may leave a service unidentified; rerun a particular port with more thorough `-sV` when needed. `--max-rate 100` **caps** packet sending rate (unlike `--min-rate`), and `--max-retries 2` can still miss responses on unreliable networks. `--stats-every 10s` reports progress, `--reason` shows port-state evidence, and `-sC` runs Nmap's default scripts, which should be reviewed for the discovered service. Because `-oN` only saves normal output, use `-oA scans/windows-services` instead if you also want XML and grepable files.
+
+**Decision:** Compare with `scans/tcp-all.nmap` and `scans/tcp-services.nmap`. If a targeted port shows nothing, do **not** conclude the service is absent from the entire host; check the full-range results and any verification rescan.
+
 ## Step 4 — Detect versions on interesting UDP ports
 
 Replace the example ports with relevant results:
@@ -244,6 +268,7 @@ For every suspected issue, record the affected port, product/version, prerequisi
 - [ ] Save all Nmap outputs.
 - [ ] Extract open TCP ports.
 - [ ] Run `-sC -sV` on discovered TCP ports.
+- [ ] If Windows/SMB/WinRM/RPC is present, consider a targeted follow-up on relevant ports; never substitute its fixed port list for all-service detection.
 - [ ] Investigate interesting UDP results.
 - [ ] Run relevant, reviewed NSE scripts.
 - [ ] Research software versions and CVEs.
