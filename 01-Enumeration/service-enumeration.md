@@ -689,7 +689,195 @@ SELECT version(), current_user;
 ```
 
 For **MSSQL**, an authorized query such as `SELECT @@VERSION;` and `SELECT SYSTEM_USER;` establishes basic context; avoid features like `xp_cmdshell` during enumeration unless a separate verified lab task justifies it. See [Initial Access](../03-Initial-Access/initial-access.md) for next steps after an actual verified weakness.
-## 11. Investigate potential vulnerabilities
+## 11. Additional services — inspect when discovered
+
+**Rule:** These are **conditional service-specific checks**, not a replacement for full port scanning. Only inspect a service actually discovered on an assigned target; substitute its **real port** for examples. Keep all commands read-only and test with supplied lab credentials only.
+
+### 11.1 LDAP / LDAPS / Global Catalog — commonly 389, 636, 3268, 3269 TCP
+
+**Potential checks:** Anonymous rootDSE disclosure, naming contexts/domain details, LDAP signing/TLS requirements, allowed authenticated reads, relevant users/computers/groups and delegated ACLs (with an approved domain identity).
+
+```bash
+# One read-only rootDSE request; this may be denied when anonymous binds are disabled
+nmap --script-help ldap-rootdse
+sudo nmap -Pn -p 389 --script ldap-rootdse "$IP"
+ldapsearch -x -H "ldap://$IP:389" -s base -b "" namingContexts defaultNamingContext supportedLDAPVersion
+```
+
+For secure LDAP use the actual hostname/port with `ldaps://HOST:636` and inspect the certificate. Authenticate only using assigned credentials; don't recursively dump directory objects or confuse a readable rootDSE with an exploitable authorization bypass. See [AD Enumeration](../05-Active-Directory/ad-enumeration.md).
+
+### 11.2 Kerberos / AD domain controller — commonly 88 TCP/UDP, 464 TCP/UDP
+
+**Potential checks:** Domain/FQDN, DC/KDC DNS records, clock skew, service principal names, account policy, permitted groups and a **specific** account's Kerberos configuration.
+
+```bash
+# Only when an AD domain was identified and is assigned
+export DOMAIN=example.lab
+dig @"$IP" "_kerberos._tcp.$DOMAIN" SRV
+date -u
+sudo nmap -Pn -sV -p 88,464 "$IP"       # Follow up, NOT a complete scan
+```
+
+Do not perform bulk username enumeration, AS-REP requests, ticket harvesting or password spraying during initial discovery. Those are separate, specifically scoped assessment decisions. Use [AD Attack Paths](../05-Active-Directory/ad-attack-paths.md) after validating rights and preconditions.
+
+### 11.3 POP3 / POP3S / IMAP / IMAPS — commonly 110, 995, 143, 993 TCP
+
+**Potential checks:** Service greeting, `CAPA`/`CAPABILITY` features, TLS/STARTTLS, plaintext-auth policy, authentication requirements and whether an **assigned test mailbox** is accessible.
+
+```bash
+nmap --script-help pop3-capabilities
+nmap --script-help imap-capabilities
+sudo nmap -Pn -sV -p 110,143 --script pop3-capabilities,imap-capabilities "$IP"
+printf 'a1 CAPABILITY\r\na2 LOGOUT\r\n' | nc -w 5 "$IP" 143
+openssl s_client -starttls imap -connect "$IP:143" -crlf
+```
+
+Use the actual discovered ports; for implicit TLS inspect `993` or `995` instead. Do not enumerate or retrieve personal mail, try unknown passwords or bulk-guess mail users. A capability list is not a login bypass.
+
+### 11.4 Microsoft RPC / MSRPC endpoint mapper — commonly 135 TCP, dynamic high ports
+
+**Potential checks:** Host/domain details, advertised RPC endpoint UUIDs, service registrations, whether SMB/AD/WinRM is also present and whether authenticated management is permitted. RPC endpoints may be dynamically assigned: **don't assume the only relevant port is 135**.
+
+```bash
+sudo nmap -Pn -sV -p 135 "$IP"
+# For Unix rpcbind/NFS instead:
+rpcinfo -p "$IP"
+```
+
+Enumerate the actual discovered endpoint ports with Nmap first. An advertised endpoint does not automatically expose an administrative operation. Avoid remote service changes, coercion/spoofing and exploit modules as routine enumeration.
+
+### 11.5 WinRM / WS-Management — commonly 5985 HTTP, 5986 HTTPS TCP
+
+**Potential checks:** Whether a WinRM service responds, HTTP vs TLS, authentication challenges, service version, allowed users and whether assigned credentials grant a legitimate remote session.
+
+```bash
+sudo nmap -Pn -sV -p 5985,5986 "$IP"
+curl -i "http://$IP:5985/wsman"
+curl -k -i "https://$IP:5986/wsman"
+```
+
+HTTP `401`, `405` or `404` may simply indicate auth/protocol requirements; none proves exploitation. Use a WinRM client only with assigned credentials, then document the user's real privileges. `-k` disables TLS verification for controlled lab inspection.
+
+### 11.6 Telnet / remote terminal — commonly 23 TCP
+
+**Potential checks:** Banner, operating system, transport encryption (Telnet usually plaintext), reachable login prompt and whether a **supplied** account can log in.
+
+```bash
+sudo nmap -Pn -sV -p 23 "$IP"
+nc -nv "$IP" 23
+```
+
+Do not guess usernames/passwords or expose real credentials on untrusted networks. Document a plaintext-login exposure as a configuration risk, not an automatic foothold.
+
+### 11.7 VNC / remote desktop sharing — commonly 5900–5909 TCP
+
+**Potential checks:** Protocol version, whether authentication is required, encryption/security options, and access permitted to a lab-provided account.
+
+```bash
+nmap --script-help vnc-info
+sudo nmap -Pn -p 5900 --script vnc-info "$IP"
+```
+
+A connection to a VNC listener does not authorize interacting with another person's desktop. No brute-force/authentication-bypass tests without explicit lab scope.
+
+### 11.8 rsync daemon — commonly 873 TCP
+
+**Potential checks:** Anonymous module listing, exposed module names and permissions, unexpected read/write access, sensitive path exposure and daemon version. **Never assume a listed module is readable or writable**.
+
+```bash
+nmap --script-help rsync-list-modules
+sudo nmap -Pn -p 873 --script rsync-list-modules "$IP"
+rsync "rsync://$IP/"                  # List visible modules; no file download
+rsync "rsync://$IP/MODULE/"           # List contents only if permitted
+```
+
+Do not transfer the remote files to Kali except under the official exam compromise-necessary exception. Write tests need separate explicit authorization and cleanup.
+
+### 11.9 TFTP — commonly 69 UDP
+
+**Potential checks:** Confirm UDP service, note missing authentication design, identify known filenames **only from authorized evidence**, and verify that any file transfers are in scope.
+
+```bash
+sudo nmap -Pn -sU -sV -p 69 "$IP"
+```
+
+TFTP has no standard directory listing, and UDP silence is inconclusive. Avoid guessing large filename lists, downloading arbitrary files or uploading executable content as part of routine enumeration.
+
+### 11.10 Redis / Memcached — commonly 6379 / 11211 TCP
+
+**Potential checks:** Presence of authentication, server version, whether read-only status/info commands are unexpectedly accessible without approved credentials, service binding and configured network exposure.
+
+```bash
+redis-cli -h "$IP" -p 6379 PING
+redis-cli -h "$IP" -p 6379 INFO server     # May require authentication
+printf 'version\r\nquit\r\n' | nc -w 5 "$IP" 11211
+```
+
+Record only harmless status/metadata. Never use `CONFIG SET`, filesystem writes, replication changes, FLUSH commands or bulk key/value extraction during basic enumeration. An exposed port is not automatically unauthenticated access.
+
+### 11.11 MongoDB / Elasticsearch / OpenSearch — commonly 27017 / 9200 TCP
+
+**Potential checks:** Transport security, authentication requirement, product/version, whether harmless status/health endpoints respond anonymously and whether the service is bound to a public interface.
+
+```bash
+# The following read-only checks may return an expected access-denied response
+mongosh "mongodb://$IP:27017" --quiet --eval 'db.runCommand({hello:1})'
+curl -i "http://$IP:9200/"
+curl -i "http://$IP:9200/_cluster/health"
+```
+
+For TLS, use the discovered scheme/port and verify certificate behavior. Avoid listing/dumping whole databases, indices, user records or modifying cluster settings. A cluster health response may be intentionally public.
+
+### 11.12 Docker / Kubernetes / container management APIs — commonly 2375, 2376, 6443 TCP
+
+**Potential checks:** HTTP/TLS transport, authentication, exposed API version, authorization for a read-only status request, and whether the endpoint is actually reachable from the assigned host.
+
+```bash
+# Only if these APIs were identified on these exact discovered ports
+curl -i "http://$IP:2375/version"      # Unencrypted Docker API: investigate exposure
+curl -k -i "https://$IP:6443/version"  # Kubernetes API version/health clue
+```
+
+These are sensitive management interfaces. **Do not create pods, run containers, attach to exec endpoints, retrieve cluster secrets or change configuration** during enumeration. A reachable version endpoint is a lead, not administrative access.
+
+### 11.13 HTTP proxies / management consoles — often 3128, 8080, 8000, 8443 TCP
+
+**Potential checks:** Does the listener speak HTTP, provide a proxy challenge (`407`), present an admin UI, use default vhost routing or expose an authentication boundary?
+
+```bash
+curl -i "http://$IP:8080/"             # Use the discovered port
+sudo nmap -Pn -sV -p 8080 "$IP"
+```
+
+Use [Web Enumeration](../02-Web-Application/web-enumeration.md) for any UI. An open proxy finding requires a **specifically authorized test destination**; never forward traffic to third-party sites or out-of-scope internal hosts.
+
+### 11.14 Message protocols — MQTT (1883/8883), AMQP (5672/5671), SIP (5060/5061)
+
+**Potential checks:** Product/version, TLS, authentication requirements, exposed management interface, and whether anonymous capabilities or assigned test accounts have excess rights.
+
+```bash
+sudo nmap -Pn -sV -p 1883,8883,5672,5671,5060,5061 "$IP"
+# SIP may use UDP; probe only discovered or specifically relevant in-scope ports
+sudo nmap -Pn -sU -sV -p 5060 "$IP"
+```
+
+For MQTT/AMQP, inspect only assigned broker topics/queues and **do not publish messages or subscribe broadly**. For SIP, do not originate calls, register arbitrary extensions or brute-force credentials. Treat any claimed anonymous access as unverified until a minimally scoped manual check confirms it.
+
+### 11.15 Other high-value service clues
+
+| Service / common ports | What to look for without disruptive actions |
+| --- | --- |
+| NTP (123/UDP) | Server version/time behavior; clock skew affecting Kerberos; no reflection/amplification testing |
+| RADIUS (1812/1813 UDP) | Authentication-service identity/configuration from authorized context; no bulk shared-secret guessing |
+| Java RMI/JMX (1099/9010/etc.) | Registry/management endpoint exposure and authentication; no arbitrary code/deserialization payloads during discovery |
+| X11 (6000+) | Unexpected remote display access; do not view or interfere with private sessions |
+| Printer protocols (515, 631, 9100) | Exposed admin UI, model/version and auth; no unsolicited print jobs |
+| Git / dev service (9418, 3000, 5000, 8081, etc.) | Public project/repository listing, permissions, version and access boundaries; no source-code downloads outside OffSec's exam exception |
+| Other UDP services | Run `-sU -sV` against relevant discovered ports and assess `open|filtered` carefully |
+
+**When a service is unfamiliar:** use `nmap -sV` on its **actual** port, inspect its banner with a suitable read-only protocol client, identify product/version and default authentication requirements, consult trusted vendor documentation/CVEs, and decide on **one** focused authorized verification. Unknown ≠ unimportant; odd ports may be the entry point.
+
+## 12. Investigate potential vulnerabilities
 
 For every service:
 
@@ -746,7 +934,14 @@ Next action:
 - [ ] Enumerate web applications, including hostnames and virtual hosts.
 - [ ] Inspect accessible SMB shares and permissions.
 - [ ] Check FTP, SSH, DNS and SNMP as applicable.
-- [ ] Investigate mail (SMTP, POP3, IMAP), NFS, RDP and database services when present.
+- [ ] For SMB: evaluate guest access, actual share permissions, dialects, signing and in-scope domain identity.
+- [ ] For FTP: check anonymous auth, directory listings, permissions and possible web-root relationship.
+- [ ] For SMTP and POP3/IMAP: check capabilities, TLS, permitted auth and possible information leakage (no bulk enumeration).
+- [ ] For DNS/SNMP: inspect assigned records and authorized management information; validate UDP responses.
+- [ ] For NFS/RPC: enumerate registered services, exports, effective permissions and nonstandard ports.
+- [ ] For SSH/RDP/WinRM: inspect protocol security and validate only supplied credentials.
+- [ ] For databases/caches/management APIs: test only read-only version/health/auth controls.
+- [ ] Consider LDAP/Kerberos, Telnet, VNC, rsync, TFTP, Redis, MongoDB, message brokers and unfamiliar ports **when actually discovered**.
 - [ ] Save all commands and outputs.
 - [ ] Research versions and validate potential weaknesses.
 - [ ] Record credentials and sensitive findings securely in your local lab notes, **not in a public GitHub repository**.
