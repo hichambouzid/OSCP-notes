@@ -10,6 +10,18 @@
 
 **Previous:** [Nmap Enumeration](./nmap.md)
 
+## Service-by-service testing rule
+
+For **every discovered port**, record: protocol, actual service/version, anonymous or authenticated access, configuration/security controls, in-scope resources, likely weakness, and **what evidence would prove it**. Port numbers in headings are examples, **never scan boundaries**. Work from a **full TCP 1–65535 scan** and a separately documented UDP decision; identify **all** discovered open TCP services first. If you have no path, revisit obscure ports, alternative HTTP ports, DNS/vhosts and inconclusive UDP results.
+
+**Potential checks are hypotheses, not vulnerabilities.** Use only manual, authorized, non-destructive tests. Do not default to guessed credentials, bulk user enumeration, spraying, brute forcing, relay/spoofing, mass vuln scanning, arbitrary file transfers, or broad NSE exploit categories. Before a targeted NSE check, run `nmap --script-help SCRIPT_NAME` and confirm what it does. See the [official OffSec OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) for exam restrictions.
+
+**Service tracking matrix (copy privately per target):**
+
+```text
+PORT/PROTO | DETECTED SERVICE | ACCESS (anon/assigned/denied) | MANUAL CHECK | RESULT | NEXT STEP
+```
+
 ## Workflow
 
 1. Review `scans/tcp-services.nmap` and UDP results.
@@ -94,6 +106,14 @@ less evidence/web-page.html
 For paths discovered with Gobuster, request them individually and distinguish `200` (response), `301/302` (redirect), `401` (authentication required), `403` (forbidden), and `404` (not found). A `200` alone does not prove sensitive data exposure.
 
 
+### HTTP/HTTPS — potential checks to test
+
+- **Hostname/virtual host mismatch:** follow `Location` redirects, certificates and app links; test discovered DNS-backed names and HTTP Host headers separately. HTTPS may also depend on TLS SNI.
+- **Unexpected surfaces:** manually inspect `robots.txt`, `sitemap.xml`, linked JavaScript, API docs, login/admin forms and upload functions. Use small wordlists/rates with wildcard-response validation; see [Web Enumeration](../02-Web-Application/web-enumeration.md).
+- **Security boundaries:** compare a baseline with a changed parameter, logged-in versus anonymous access, and resource ownership using only approved lab accounts. Investigate SQLi, LFI, command injection, XSS, SSTI, SSRF and upload execution **only if the feature exists**.
+- **Config/version:** verify server/framework/CMS versions against advisories; check allowed HTTP methods, authentication, TLS certificates and cookie flags. A banner, response status, or missing security header is not an exploit by itself.
+
+**Decision:** enumerate **every discovered web port** and hostname as its own application. Do not assume `80` and `443` are the only web listeners.
 ## 2. SMB — Windows file sharing (139/445)
 
 ### Identify configuration and shares
@@ -157,6 +177,33 @@ For a lab-provided account, use `smbclient "//$IP/SHARE" -U USERNAME` and enter 
 **If access fails:** `NT_STATUS_ACCESS_DENIED` indicates insufficient permission; `NT_STATUS_BAD_NETWORK_NAME` often means an incorrect share name. Record the outcome instead of assuming anonymous access works.
 
 
+### SMB — potential checks to test
+
+**Read-only baseline:**
+
+```bash
+# Run against an SMB service actually found, often 445/tcp
+nmap --script-help smb-protocols
+sudo nmap -Pn -p 445 --script smb-protocols,smb2-security-mode,smb2-capabilities "$IP"
+smbclient -L "//$IP/" -N                       # One anonymous/guest attempt
+smbclient -L "//$IP/" -U 'DOMAIN/USERNAME'      # Lab-supplied account; prompt for password
+```
+
+**What to investigate:**
+
+- **Guest/null access:** do anonymous share listing and actual share access succeed? A visible share name is **not** permission to read its contents.
+- **Share permissions:** compare read/list/write access with the assigned identity. For write access, do a harmless test marker and clean it up **only with explicit lab permission**; do not write to SYSVOL, production paths or unknown files.
+- **SMB dialects/signing:** note whether SMBv1 is offered, and whether signing is required. Signing not required is a **relay-risk condition**, not proof that a relay attack will work; **do not attempt spoofing/relay during the exam**.
+- **Identity and policy:** domain, hostname, OS/version, SYSVOL/NETLOGON listing, exposed configuration/scripts, and differences between anonymous and authorized users. Inspect allowed files **in place** where possible; exam file-download restrictions apply.
+- **Domain RPC:** if the host and scope permit it, a single guest query can reveal whether a null session is accessible:
+
+```bash
+rpcclient -U "" -N "$IP" -c 'srvinfo'
+```
+
+If denied, record the restriction; do not brute credentials. For Windows patch/CVE leads, confirm exact OS/build and whether the vulnerable SMB protocol or configuration is actually enabled.
+
+**Record:** actual access level per share, signing, dialects, host/domain, and sanitized evidence. See [AD Enumeration](../05-Active-Directory/ad-enumeration.md) for credentialed domain relationships.
 ## 3. FTP — File Transfer Protocol (21)
 
 ```bash
@@ -268,6 +315,20 @@ ftp> bye
 
 Look for backups, configuration files, web-root content and version clues. A banner version is a lead for research, not proof of a CVE.
 
+### FTP — potential checks to test
+
+- **Anonymous login:** check once, then list the assigned directory with `pwd`, `ls`, `dir` (no download required). Record whether guest access is readable or restricted.
+- **Permissions:** can your supplied test account list the directory? Is a sensitive backup/configuration **name** exposed? Test write privileges only if the lab explicitly authorizes a harmless upload and cleanup.
+- **Web-root relationship:** if an exposed FTP share appears linked to an actual web root, document that hypothesis and test using a harmless marker only when authorized. An upload does not prove server-side code execution.
+- **Protocol security:** check FTP banner/version, plaintext authentication, FTPS support and whether `AUTH TLS` is offered; server TLS certificate and version must be confirmed.
+- **Exploit leads:** match an exact FTP server version to vendor advisories; do **not** run backdoor, denial-of-service or brute-force NSE scripts during routine enumeration.
+
+```bash
+# Read-only fingerprint; replace 21 with the actual discovered FTP port
+sudo nmap -Pn -sV -p 21 --script ftp-anon,ftp-syst "$IP"
+```
+
+**Exam reminder:** `get`, `mget`, `curl -o` and similar file transfers **download target files to Kali**. OffSec permits that only when necessary to compromise the target, and requires deletion after objectives. Directory listings and in-place reading are preferable.
 ## 4. SSH — Secure Shell (22)
 
 ```bash
@@ -315,6 +376,14 @@ sftp -P 22 "USERNAME@$IP"
 Then use `pwd`, `ls`, `cd`, and `bye` for navigation; `get notes.txt` is a **download** and subject to the same exam restriction as `scp`. Do not download private material outside the lab scope.
 
 
+### SSH — potential checks to test
+
+- **Banner/algorithms:** collect server product, host-key types and key-exchange/cipher algorithms with `ssh2-enum-algos` and `ssh-hostkey`. Outdated options are hardening leads, not automatic footholds.
+- **Authentication:** try only explicitly supplied credentials/keys; note whether the authorized identity has shell/SFTP access and its effective user. Do not use account guessing or brute-force tools.
+- **Version/CVE:** verify exact package build, distro patch backports and exploit preconditions. A common OpenSSH banner does not demonstrate that a CVE is exploitable.
+- **Post-login context:** if authorized, inspect `id`, `sudo -l`, local listening services and file permissions using the [Linux privilege-escalation guide](../04-Privilege-Escalation/linux-privesc.md).
+
+**Potential issue:** reused assigned credentials, exposed weaker auth configuration, or a verified version-specific flaw. **Do not** equate SSH availability with access.
 ## 5. DNS — Domain Name System (53 TCP/UDP)
 
 ```bash
@@ -355,6 +424,21 @@ dig @"$IP" www."$DOMAIN" A +short
 ```
 
 
+### DNS — potential checks to test
+
+- **Records:** check `A`, `AAAA`, `CNAME`, `NS`, `MX`, `TXT`, `SRV` and PTR for assigned hosts/domains. Domain-controller SRV records may reveal additional in-scope machines.
+- **Zone transfer:** test `AXFR` **only for the assigned zone**, against an authoritative server; refusal is expected on properly restricted servers.
+- **Unintended disclosure:** look for internal hostnames, nonstandard service locations, admin zones, or lab-only TXT records. Do not broaden scope just because DNS reveals a name.
+- **Recursion/transfer policy:** note whether the server is authoritative or recursive; assess only with queries for names the lab authorizes, never use third-party targets or DNS spoofing.
+
+```bash
+export DOMAIN=example.lab          # Replace with assigned domain
+dig @"$IP" "$DOMAIN" NS
+dig @"$IP" _ldap._tcp.dc._msdcs."$DOMAIN" SRV
+dig @"$IP" "$DOMAIN" AXFR          # Only on assigned zone
+```
+
+**UDP note:** an inconclusive `53/udp open|filtered` result needs a real DNS query or version/service probe; the same service may use TCP/53.
 ## 6. SNMP — Network management (161/UDP)
 
 ```bash
@@ -388,6 +472,19 @@ The first OID requests the system description; the second walks the system infor
 Record hostnames, system details and interface clues. Avoid write operations (`snmpset`) during enumeration.
 
 
+### SNMP — potential checks to test
+
+- **Version and supplied community:** is SNMPv1/v2c accessible using a **lab-provided** community, or is SNMPv3 required? A failed SNMP query does not confirm no service.
+- **System and interface clues:** review system name/description, interfaces, IPs, routes and running network-service hints **only within authorized access**.
+- **Security exposure:** unauthenticated or weakly protected management information is a configuration finding; do not automatically walk all OIDs or try random strings across hosts.
+- **Write access:** identify whether your provided account/community has write capabilities from the authorized configuration; **do not use `snmpset`** as a routine test.
+
+```bash
+snmpget -v2c -c COMMUNITY "$IP" 1.3.6.1.2.1.1.5.0
+snmpwalk -v2c -c COMMUNITY "$IP" 1.3.6.1.2.1.2.2.1.2
+```
+
+Both commands require a supplied or expressly approved community. Confirm the actual UDP port and version and record retrieved values without publishing sensitive management data.
 ## 7. SMTP — Mail service (25/465/587)
 
 ```bash
@@ -440,6 +537,21 @@ printf 'EHLO kali.lab\r\nQUIT\r\n' | nc -w 5 "$IP" 25 | tee scans/smtp-ehlo.txt
 **Do not** attempt open-relay testing by delivering mail to third parties, bulk recipient guessing, or unsolicited messages. SMTP generally does not let you list mailboxes or download emails. Mailbox access uses separate protocols such as POP3 or IMAP with authorized credentials.
 
 
+### SMTP — potential checks to test
+
+- **Banner/EHLO:** enumerate capabilities (`STARTTLS`, `AUTH`, `VRFY`, `EXPN`, `SIZE`, NTLM) and server/domain names; `EHLO` is not an authentication attempt.
+- **TLS:** compare advertised STARTTLS support on the actual port with TLS certificate details; a server may hide `AUTH` until TLS is negotiated.
+- **User enumeration:** if `VRFY`/`EXPN` are advertised, test **at most an explicitly supplied lab identity** when permitted. Do not run bulk recipient guessing, `smtp-enum-users` wordlists, or password spraying.
+- **Open relay:** an EHLO capability list cannot prove relay. Only perform a controlled relay test when the lab **explicitly authorizes** it and the sender/recipient/test destination are owned by the lab; avoid delivering real messages or using third-party addresses.
+- **AD clues:** if NTLM is advertised, targeted `smtp-ntlm-info` may disclose host/domain/build details; inspect `nmap --script-help smtp-ntlm-info` first.
+
+```bash
+nmap --script-help smtp-commands
+sudo nmap -Pn -sV -p 25 --script smtp-commands "$IP"  # Replace with discovered SMTP port
+printf 'EHLO kali.lab\r\nQUIT\r\n' | nc -w 5 "$IP" 25
+```
+
+**Record:** server banner, auth policy, advertised commands, STARTTLS, domain names and precisely what was **not** verified (e.g. relay not tested). For mailbox access, see the POP3/IMAP section below.
 ## 8. NFS — Network File System (111/2049)
 
 ```bash
@@ -472,6 +584,19 @@ sudo umount /mnt/oscp-nfs
 Export listing does not guarantee access: server restrictions, protocol versions and filesystem permissions still apply.
 
 
+### NFS/RPC — potential checks to test
+
+- **RPC program discovery:** `rpcinfo -p` identifies services/ports registered through rpcbind (which may not be 111/2049); investigate any discovered in-scope nonstandard program ports.
+- **Exports:** `showmount -e` lists some NFS exports; compare permitted client restrictions and whether the assigned account can mount/read an explicitly authorized share **read-only**.
+- **Sensitive exposures:** look for exposed mount paths, backup locations, permissions and NFS version; an export listing is not proof your client can access files.
+- **Ownership mapping:** root squashing, UID/GID mapping and export permission misconfiguration are possible concerns, but **cannot be determined from a share name**. Avoid write/ownership changes and do not test `no_root_squash` destructively.
+
+```bash
+rpcinfo -p "$IP"
+showmount -e "$IP"
+```
+
+**Exam restriction:** copying remotely mounted target files to Kali is a download; apply the documented exception only when necessary for compromise, then remove the local copy.
 ## 9. RDP — Remote Desktop (3389)
 
 ```bash
@@ -493,6 +618,14 @@ Enter the password securely when prompted; client syntax varies by installed Fre
 Do not assume an open RDP port grants access or that file transfer is enabled.
 
 
+### RDP — potential checks to test
+
+- **NLA/security layers:** inspect RDP security mode, TLS certificates and host/domain information from `rdp-ntlm-info` and `rdp-enum-encryption` (read each NSE help entry first).
+- **Login rights:** only a lab-provided account can establish authorized access; note whether the identity is merely a remote-desktop user or has administrative rights.
+- **After login:** inspect privileges, groups, network connections and local services following the [Windows privilege-escalation guide](../04-Privilege-Escalation/windows-privesc.md).
+- **Version/CVE:** confirm build and patch-level preconditions; do not run blanket RDP exploitation or authentication guessing.
+
+**Decision:** a working RDP listener is a service clue, not proof of weak credentials or a bypass.
 ## 10. Databases — MySQL, PostgreSQL, MSSQL
 
 ```bash
@@ -537,6 +670,25 @@ In `psql`:
 Database results can be exported locally using approved client features, but avoid dumping entire databases or extracting personal data. Record only the minimum evidence required for the lab finding.
 
 
+### Databases — potential checks to test
+
+- **Exposure/auth:** determine whether the service accepts remote connections, what authentication is required, and whether an expressly assigned identity has more access than expected. Avoid default-credential attempts or dumping data.
+- **Privileges:** after legitimate login, check **current user/role**, version, accessible databases/schema names and any dangerous permissions or server-side program execution capabilities. Only inspect; do not enable features.
+- **Network/config:** note optional TLS settings, server version, local-only endpoints and OS/service-account context.
+- **CVE research:** match exact vendor, version, patch and configuration. A TCP/1433 response is not enough to label MSSQL vulnerable.
+
+Read-only authenticated examples:
+
+```sql
+-- MySQL/MariaDB (inside the mysql client)
+SELECT VERSION(), CURRENT_USER();
+SHOW GRANTS;
+
+-- PostgreSQL (inside psql)
+SELECT version(), current_user;
+```
+
+For **MSSQL**, an authorized query such as `SELECT @@VERSION;` and `SELECT SYSTEM_USER;` establishes basic context; avoid features like `xp_cmdshell` during enumeration unless a separate verified lab task justifies it. See [Initial Access](../03-Initial-Access/initial-access.md) for next steps after an actual verified weakness.
 ## 11. Investigate potential vulnerabilities
 
 For every service:
