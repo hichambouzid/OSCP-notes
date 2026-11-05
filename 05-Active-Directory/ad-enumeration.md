@@ -26,7 +26,11 @@ dig @"$DC" "$DOMAIN" A
 
 # Full TCP port discovery on this assigned domain controller
 mkdir -p scans/ad
-sudo nmap -Pn -sS -p- --reason -oA scans/ad/dc-tcp-all "$DC"
+sudo nmap -Pn -n -sS -p- -T4 \
+  --min-rate 300 \
+  --max-retries 1 \
+  --max-scan-delay 100ms \
+  --open -v -oA scans/ad/dc-tcp-all "$DC"
 
 # Identify versions/scripts on ALL discovered open TCP ports, not a fixed AD list
 DC_PORTS=$(grep -oE '[0-9]+/open/tcp' scans/ad/dc-tcp-all.gnmap | cut -d/ -f1 | sort -nu | paste -sd, -)
@@ -36,6 +40,8 @@ else
   echo "No confirmed open TCP ports; verify VPN, target IP, routing and filtering."
 fi
 ~~~
+
+The full-range scan uses the requested **fast timing**; a one-retry cap can miss services on lossy/rate-limited paths. Where results look incomplete, run `sudo nmap -Pn -n -sS -p- --reason -oA scans/ad/dc-tcp-verify "$DC"` and combine all confirmed open ports before concluding enumeration.
 
 AD services often appear on ports 53, 88, 135, 139, 389, 445, 464, 636, 3268, 3269, and 5985/5986, **but these are clues, not a scan boundary**. The full TCP scan and all-discovered-port service detection above must be **repeated for every assigned AD host**, not only the DC. For each machine, run service detection on **all its discovered open TCP ports** using the extraction procedure in [Nmap Enumeration](../01-Enumeration/nmap.md). Consider relevant UDP ports (especially DNS/Kerberos/NTP) and expand UDP coverage when the initial top-100 pass is insufficient; no fixed list rules out services elsewhere. If DNS cannot resolve lab hostnames, check VPN DNS and known DC FQDN before editing your resolver. Correct hostname and time are important for Kerberos.
 
