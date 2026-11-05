@@ -132,10 +132,14 @@ When the exam or lab explicitly assigns a target IP, you can proceed to port sca
 
 ```bash
 sudo nmap -Pn -p 22,80,443,445 "$IP"
-sudo nmap -Pn -sS -p- --reason -oA scans/tcp-all "$IP"
+sudo nmap -Pn -n -sS -p- -T4 \
+  --min-rate 300 \
+  --max-retries 1 \
+  --max-scan-delay 100ms \
+  --open -v -oA scans/tcp-all "$IP"
 ```
 
-`-Pn` skips host discovery; it **does not** confirm that the host is alive. `-p-` scans all 65,535 TCP ports. Avoid forcing an aggressive minimum rate during the first scan: it can hide results on unstable or rate-limited links. If results are unexpected, verify the VPN/route and rescan conservatively.
+`-Pn` skips host discovery; it **does not** confirm that the host is alive. `-p-` scans all 65,535 TCP ports. This **fast scan** forces a minimum probing rate and only one retry; `--max-retries 1` may miss an open service over a lossy VPN. If results are empty, incomplete or suspicious, verify the VPN/route and rescan with `sudo nmap -Pn -n -sS -p- --reason -oA scans/tcp-verify "$IP"`. Compare both scans before ruling out ports.
 
 After identifying open ports, replace the example list:
 
