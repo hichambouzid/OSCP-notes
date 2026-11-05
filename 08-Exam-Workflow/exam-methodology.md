@@ -41,7 +41,7 @@ Exit the script session when finished. Logs may contain credentials or target-sp
 ## 4. Repeatable methodology per target
 
 1. Confirm scope, IP, VPN route and known credentials.
-2. Complete a **full TCP 1–65535 scan of every assigned target**, including each AD machine. Avoid forcing a high `--min-rate` as a default; verify suspicious or empty results.
+2. Complete a **full TCP 1–65535 scan of every assigned target**, including each AD machine. The documented `-T4 --min-rate 300 --max-retries 1 --max-scan-delay 100ms` profile prioritizes speed and **may miss ports**. If empty/inconsistent, recheck with an accuracy-focused full-TCP scan (without those constraints) and combine confirmed open ports.
 3. Extract **all** open TCP ports for `-sC -sV` detection. Run a UDP initial pass, then explicitly decide whether to expand targeted ports, top 1,000 or full UDP; **top 100 does not complete UDP enumeration**. Enumerate the actual services, not assumed standard ports.
 4. For web applications, investigate hosts, paths, parameters, auth and user roles.
 5. Research a candidate CVE only when the service/version/preconditions match.
