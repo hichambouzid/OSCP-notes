@@ -29,18 +29,32 @@ ip route get "$IP"
 ## Step 1 — Find all open TCP ports
 
 ```bash
-sudo nmap -Pn -sS -p- --reason -oA scans/tcp-all "$IP"
+sudo nmap -Pn -n -sS -p- -T4 \
+  --min-rate 300 \
+  --max-retries 1 \
+  --max-scan-delay 100ms \
+  --open -v -oA scans/tcp-all "$IP"
 ```
 
 | Option | Meaning |
 | --- | --- |
-| `-Pn` | Skip host discovery |
-| `-sS` | TCP SYN scan |
-| `-p-` | Scan TCP ports 1–65535 |
-| `--reason` | Show evidence behind port states |
-| `-oA` | Save `.nmap`, `.gnmap`, and `.xml` outputs |
+| `-Pn` | Skip host discovery; does not prove target is online |
+| `-n` | Do not perform reverse DNS resolution |
+| `-sS -p-` | SYN scan across all 65,535 TCP ports |
+| `-T4` | Aggressive timing template for reasonably reliable networks |
+| `--min-rate 300` | Aim to send at least 300 probes/second; **not** a maximum |
+| `--max-retries 1` | At most one retransmission per probe; faster but may miss services |
+| `--max-scan-delay 100ms` | Cap adaptive scan delay; can miss rate-limited responses |
+| `--open -v` | Display only open/possibly open ports and verbose scan progress |
+| `-oA` | Save `.nmap`, `.gnmap` and `.xml` for later analysis |
 
-**Do not force `--min-rate` as a default.** Nmap adapts its packet timing; an excessive minimum rate can lose responses on VPNs, rate-limited hosts or congested links. If results look incomplete, check the target/VPN, then rerun with conservative timing (for example `-T2`) rather than assuming all unreported ports are closed. `-p-` covers all TCP port numbers, but no scan can guarantee a response through filtering.
+**Fast discovery profile requested for the lab:** The timing and retry flags prioritize speed. `-p-` still sends probes to all TCP ports, **but `--max-retries 1` can miss an open port** if packets are lost or the host rate-limits responses. `--max-scan-delay 100ms` may also cap a delay Nmap needs to accommodate rate limiting. This is **not** an accuracy guarantee. If few/no ports appear, the VPN is unstable, or a known service is missing, run an accuracy-focused verification:
+
+```bash
+sudo nmap -Pn -n -sS -p- --reason -oA scans/tcp-verify "$IP"
+```
+
+Compare results and enumerate the **union of confirmed open ports** before concluding the host has no additional services. The user-supplied example IP `192.168.230.10` is represented here by `$IP` to keep the public notes reusable. See [Nmap Timing and Performance](https://nmap.org/book/man-performance.html).
 
 **Interpretation:**
 - `open`: A service responded as listening.
@@ -50,23 +64,13 @@ sudo nmap -Pn -sS -p- --reason -oA scans/tcp-all "$IP"
 ### Extract open TCP ports automatically
 
 ```bash
-PORTS=$(python3 - <<'PY'
-import xml.etree.ElementTree as ET
-root = ET.parse("scans/tcp-all.xml").getroot()
-ports = sorted({
-    int(p.attrib["portid"])
-    for p in root.findall(".//port")
-    if p.attrib.get("protocol") == "tcp"
-    and (p.find("state") is not None)
-    and p.find("state").attrib.get("state") == "open"
-})
-print(",".join(map(str, ports)))
-PY
-)
+# Use the .gnmap file written by -oA, AFTER the scan finishes
+PORTS=$(grep -oE '[0-9]+/open/tcp' scans/tcp-all.gnmap \
+  | cut -d/ -f1 | sort -nu | paste -sd, -)
 echo "Open TCP ports: $PORTS"
 ```
 
-If the variable is empty, check the target IP, routing, VPN, scan results, and packet loss before proceeding. Do **not** run the next command with an empty `PORTS` variable.
+If the variable is empty, confirm `scans/tcp-all.gnmap` exists and the scan has **completed**, check the current directory, target IP, routing, VPN, results and packet loss. If a verification scan found additional ports, add those ports to the list rather than relying on the first pass.  Do **not** run the next command with an empty `PORTS` variable.
 
 ## Step 2 — Scan UDP ports separately
 
@@ -235,7 +239,8 @@ For every suspected issue, record the affected port, product/version, prerequisi
 - [ ] Run a full TCP port scan.
 - [ ] Run an initial UDP pass and explicitly record its coverage; top 100 alone is not comprehensive.
 - [ ] Decide whether to scan relevant UDP ports, top 1,000 or all UDP ports based on findings and time.
-- [ ] If TCP results are empty/inconsistent, verify routing, filtering and retry carefully without an aggressive minimum rate.
+- [ ] If the fast scan is empty/inconsistent or known services are missing, run an accuracy-focused full-TCP rescan and check both outputs.
+- [ ] Extract confirmed open TCP ports from the completed `.gnmap` output; include newly verified ports.
 - [ ] Save all Nmap outputs.
 - [ ] Extract open TCP ports.
 - [ ] Run `-sC -sV` on discovered TCP ports.
