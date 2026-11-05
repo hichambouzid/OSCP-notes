@@ -47,12 +47,16 @@ export IP=192.168.56.101     # Replace with assigned target
 mkdir -p "$HOME/oscp-local/$IP"/{scans,evidence}
 cd "$HOME/oscp-local/$IP"    # Keep private lab data outside public Git
 ip route get "$IP"
-sudo nmap -Pn -sS -p- --reason -oA scans/tcp-all "$IP"
+sudo nmap -Pn -n -sS -p- -T4 \
+  --min-rate 300 \
+  --max-retries 1 \
+  --max-scan-delay 100ms \
+  --open -v -oA scans/tcp-all "$IP"
 # See Quick Reference for extracting every open TCP port before -sC -sV
 sudo nmap -Pn -sU --top-ports 100 -oA scans/udp-top100 "$IP"  # First UDP pass ONLY
 ~~~
 
-Then use the [Quick Reference](00-Quick-Reference/quick-reference.md) to **extract all open TCP ports and scan every detected service**, followed by [Service-Specific Enumeration](01-Enumeration/service-enumeration.md). The UDP top-100 pass is **not exhaustive**: expand to service-driven ports, top 1,000, or all UDP when warranted and record the coverage. `-Pn` skips host discovery; it does **not** prove a host is online. Default Nmap timing avoids forcing a potentially inaccurate minimum packet rate.
+Then use the [Quick Reference](00-Quick-Reference/quick-reference.md) to **extract all open TCP ports and scan every detected service**, followed by [Service-Specific Enumeration](01-Enumeration/service-enumeration.md). The UDP top-100 pass is **not exhaustive**: expand to service-driven ports, top 1,000, or all UDP when warranted and record the coverage. `-Pn` skips host discovery; it does **not** prove a host is online. The chosen scan is **speed-oriented**: `--max-retries 1` and the scan-delay cap can miss services when replies are dropped/rate-limited. Verify questionable results using `sudo nmap -Pn -n -sS -p- --reason -oA scans/tcp-verify "$IP"` and include any additional confirmed ports before service enumeration.
 
 ## OSCP+ exam compatibility — checked November 3, 2026
 
