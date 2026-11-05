@@ -35,7 +35,9 @@ PORT/PROTO | DETECTED SERVICE | ACCESS (anon/assigned/denied) | MANUAL CHECK | R
 
 ```bash
 export IP=192.168.56.101   # Replace with your assigned target
-mkdir -p scans evidence
+export LABDIR="$HOME/oscp-local/$IP"
+mkdir -p "$LABDIR"/{scans,evidence}
+cd "$LABDIR"                # Keep target-specific output OUTSIDE the public Git repo
 ```
 
 **Note:** `-Pn` is appropriate for a known assigned target that may ignore discovery probes. It does not prove the host is online.
@@ -158,12 +160,12 @@ smb: \\> pwd
 smb: \\> ls
 smb: \\> cd documents
 smb: \\> ls
-smb: \\> lcd /absolute/path/to/your/repository/evidence/smb
+smb: \\> lcd /absolute/path/to/private-oscp-workspace/evidence/smb
 smb: \\> get readme.txt
 smb: \\> exit
 ```
 
-Replace `SHARE`, `documents`, `readme.txt`, and the example absolute path with real values. `lcd` changes the local download directory; use an absolute path to avoid ambiguity. The `get` command downloads a readable file; listing a share does not prove file access.
+Replace `SHARE`, `documents`, `readme.txt`, and the example path with real values from your private Kali lab workspace. `lcd` changes the local download directory; use an absolute path to avoid ambiguity. The `get` command downloads a readable file; listing a share does not prove file access.
 
 Inspect locally:
 
@@ -266,13 +268,13 @@ Then in the FTP prompt:
 ```text
 ftp> pwd
 ftp> ls
-ftp> lcd /absolute/path/to/your/repository/evidence/ftp
+ftp> lcd /absolute/path/to/private-oscp-workspace/evidence/ftp
 ftp> binary
 ftp> get notes.txt
 ftp> bye
 ```
 
-Replace the sample `lcd` path with the absolute path to the directory created on Kali. Back in the Kali terminal, inspect the downloaded file:
+Replace the sample `lcd` path with the **real absolute path of the private lab evidence directory** you created on Kali (for example, under `$HOME/oscp-local/$IP/`). Never put target downloads in the public Git repository. Back in the Kali terminal, inspect the downloaded file:
 
 ```bash
 file evidence/ftp/notes.txt
@@ -294,7 +296,7 @@ ftp "$IP" 2121
 Inside the FTP prompt, after entering the correct remote directory:
 
 ```text
-ftp> lcd /absolute/path/to/your/repository/evidence/ftp
+ftp> lcd /absolute/path/to/private-oscp-workspace/evidence/ftp
 ftp> binary
 ftp> prompt
 ftp> mget *.txt
