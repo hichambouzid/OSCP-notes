@@ -10,8 +10,12 @@ mkdir -p "$HOME/oscp-local/$IP"/{scans,evidence}
 cd "$HOME/oscp-local/$IP"  # Private working directory outside the public Git repo
 ip route get "$IP"
 
-# Full TCP first: ports 1–65535 (no forced minimum probe rate)
-sudo nmap -Pn -sS -p- --reason -oA scans/tcp-all "$IP"
+# Fast full-TCP discovery: all ports, but only one retry (may miss responses)
+sudo nmap -Pn -n -sS -p- -T4 \
+  --min-rate 300 \
+  --max-retries 1 \
+  --max-scan-delay 100ms \
+  --open -v -oA scans/tcp-all "$IP"
 
 # Extract ALL confirmed open TCP ports from this scan
 PORTS=$(grep -oE '[0-9]+/open/tcp' scans/tcp-all.gnmap | cut -d/ -f1 | sort -nu | paste -sd, -)
@@ -24,6 +28,8 @@ fi
 # UDP FIRST PASS ONLY: not a complete UDP audit
 sudo nmap -Pn -sU --top-ports 100 -oA scans/udp-top100 "$IP"
 ~~~
+
+**Accuracy safeguard:** This is a **fast** full-range scan, not guaranteed complete detection. `--max-retries 1` and `--max-scan-delay 100ms` can miss rate-limited or lost replies. If few/no ports appear or a service is suspected, confirm with `sudo nmap -Pn -n -sS -p- --reason -oA scans/tcp-verify "$IP"`, compare both scans and enumerate all confirmed open ports. `-oA` is kept so the extraction command has a real `.gnmap` file.
 
 **Do not skip discovered ports:** never copy a fixed port list such as `22,80,445` into service detection unless those are actually your only open TCP ports. The extraction above reads Nmap's real `.gnmap` output.
 
