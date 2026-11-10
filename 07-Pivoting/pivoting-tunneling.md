@@ -2,6 +2,17 @@
 
 > Scope: Authorized hosts and subnets only. An internal service may be reachable from a compromised lab host but not from your Kali VPN interface. A tunnel forwards traffic; it **does not grant permission** to access that service.
 
+## After RCE: privilege escalation or pivot?
+
+A **reverse shell** from the [Initial Access RCE PoCs](../03-Initial-Access/initial-access.md) is a foothold, not inherently a privileged shell and **not a pivot**.
+
+1. **Confirm identity:** on an authorized Linux foothold run `whoami; id; hostname; ip -br addr; ip route` (or `whoami /all`, `hostname`, `ipconfig` on Windows).
+2. **Escalate locally when the objective requires it:** use [Linux Privilege Escalation](../04-Privilege-Escalation/linux-privesc.md) or [Windows Privilege Escalation](../04-Privilege-Escalation/windows-privesc.md). Do not assume a web-service account has root/SYSTEM.
+3. **Pivot only if the next authorized machine or service is reachable through that foothold but not directly from Kali.** Determine the exact reachable target subnet and forwarding direction first. Pivoting does **not** automatically require high privileges: a supplied SSH account with appropriate forwarding rights can suffice.
+4. **Stay within scope:** inspect only assigned hosts, avoid uncontrolled network scans, and document each hop. If the next objective is local privilege escalation, tunneling usually adds unnecessary work.
+
+**Decision:** RCE shell → verify account → local privilege escalation **or** documented network pivot → enumerate the next in-scope service; the order depends on actual permissions and lab topology, not a mandatory exploit chain.
+
 ## 0. Draw the route first
 
 ~~~text
@@ -119,6 +130,7 @@ Time opened / closed:
 ## Checklist
 
 - [ ] Destination and route in scope.
+- [ ] Confirmed whether local privilege escalation is actually necessary before any pivot, and mapped the authorized next hop.
 - [ ] Pivot identity legitimately authorized.
 - [ ] Correct tunnel direction and bind addresses.
 - [ ] Service manually verified after forwarding.
