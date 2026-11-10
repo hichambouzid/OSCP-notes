@@ -724,7 +724,7 @@ ip -br addr
 nc -lvnp 4444
 ~~~
 
-2. If the authorized lab calls for a reverse shell, use a **manually chosen, non-Meterpreter shell method** appropriate to the target OS and available interpreters, and submit it through the already-confirmed injection point. The parameter value may need URL encoding; make sure its quoting and delimiters reach the application unchanged. Avoid automatic exploitation or unreviewed scripts.
+2. If the authorized lab calls for a reverse shell, use a **manually chosen, non-Meterpreter shell method** appropriate to the target OS and available interpreters, and submit it through the already-confirmed injection point. The parameter value may need URL encoding; make sure its quoting and delimiters reach the application unchanged. Avoid automatic exploitation or unreviewed scripts. For two concrete Linux examples (**Bash TCP** and **Netcat FIFO**, with listener setup and file-collision warning), see [Initial Access — RCE-to-shell PoCs](../03-Initial-Access/initial-access.md#two-linux-rce-to-shell-pocs--bash-and-netcat-fifo).
 3. Once a legitimate callback is established, identify the user and, if supported, improve interactivity:
 
 ~~~bash
@@ -736,6 +736,8 @@ export TERM=xterm
 ~~~
 
 The Python step is for a Linux target with Python 3 and Bash installed. A web-server shell typically runs as a low-privileged service account. If there is no callback, verify the injection point, VPN address, listener, target shell, outbound connectivity and encoding instead of blindly retrying. Keep an exact, sanitized record of the request and resulting shell context.
+
+**After the foothold:** [Linux privilege escalation](../04-Privilege-Escalation/linux-privesc.md) or [Windows privilege escalation](../04-Privilege-Escalation/windows-privesc.md) is about gaining more permissions **on this host**; [pivoting](../07-Pivoting/pivoting-tunneling.md) means using it to reach a **different authorized network/service**. Neither step happens automatically after RCE.
 
 ### Reflected, stored and DOM-based XSS — manual checks
 
