@@ -245,7 +245,108 @@ Determine:
 - Which services and shares your assigned identity legitimately reaches.
 - Whether Windows remote management or RDP is available to your assigned account.
 
-For visual relationship analysis, tools such as BloodHound may be useful in training environments. **OffSec does not individually approve every collector or feature**: evaluate whether collection is within scope and whether it triggers prohibited automation before exam use.
+For visual relationship analysis, use SharpHound and BloodHound Legacy/Community Edition as explicitly listed in the OffSec FAQ. See section 5.1 for scoped collection, import, and manual relationship validation.
+
+### 5.1 SharpHound and BloodHound — collect and interpret AD relationships
+
+**Roles:** SharpHound is the Windows AD data collector. BloodHound is the graph analysis interface. SharpHound produces JSON records, normally packaged into a ZIP. BloodHound ingests those records and shows directory objects, group memberships, permissions, and possible paths. Neither tool cracks passwords.
+
+**Exam rules:** The [OSCP+ FAQ](https://help.offsec.com/hc/en-us/articles/4412170923924-OSCP-Exam-FAQ) explicitly permits SharpHound and BloodHound **Legacy and Community Edition only**. Do not use Enterprise/commercial features or prohibited automation. Read the [exam guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide), including the file-download restriction: exam target files may be downloaded only when necessary to compromise an exam machine, and permitted copies must be deleted after completing the objectives. Keep collection data local and private, not in a public repository or hosted service.
+
+#### Step 1 — Prepare BloodHound before the exam
+
+- Install BloodHound Community Edition on your local authorized lab machine using its [official quickstart](https://bloodhound.specterops.io/get-started/quickstart/community-edition-quickstart). The official CLI is the recommended installation method; confirm Docker/Compose requirements for your release.
+- Open the local BloodHound interface, set a strong local admin password, and confirm that sample data imports correctly before the exam.
+- In CE, use Settings / Download Collectors to obtain the corresponding SharpHound CE build. Keep the collector and BloodHound versions compatible; Legacy and CE collectors/data schemas are not automatically interchangeable.
+- Use a separate local graph/database for each lab. Do not leave a graph of a different domain mixed with the current one.
+
+#### Step 2 — Confirm the collection scope and starting identity
+
+On the authorized Windows domain member, using the supplied lab account:
+
+~~~powershell
+whoami
+$env:USERDNSDOMAIN
+$env:LOGONSERVER
+Resolve-DnsName -Type SRV _ldap._tcp.dc._msdcs.example.lab
+.\SharpHound.exe --help
+~~~
+
+Substitute your assigned domain and verify that the collector build supports the listed options. A normal domain account can typically read substantial directory metadata; it cannot necessarily read all local groups or session information on every host. Do not elevate privileges solely to improve collection coverage.
+
+#### Step 3 — Start with DC-only directory enumeration
+
+When the lab authorizes directory-wide enumeration in the assigned domain, use the DC-only collection method first:
+
+~~~powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\oscp-ad-collection" | Out-Null
+.\SharpHound.exe --CollectionMethods DCOnly --Domain example.lab --OutputDirectory "$env:USERPROFILE\oscp-ad-collection"
+Get-ChildItem "$env:USERPROFILE\oscp-ad-collection"
+~~~
+
+**What this collects:** directory group memberships, object properties, ACL relationships, domain trusts, OUs and GPO links, plus some GPO-derived local-group relationships. It does not query each domain-joined computer for live sessions or local groups. Use the actual authorized domain and ensure the selected DC is within scope. Where only a subset of directory objects is authorized, use a suitable directory search base/filter or manual LDAP checks instead of domain-wide collection.
+
+Do not default to `All`, forest-wide collection, or repeated session loops. Those increase collection scope, time and unnecessary traffic. A domain trust in the graph is not permission to enumerate the other domain.
+
+#### Step 4 — Understand additional collection options
+
+| Method | Information | When useful |
+| --- | --- | --- |
+| DCOnly | Directory relationships without contacting all members | Initial domain graph |
+| Group | Domain group memberships | Focused membership checks |
+| ACL | Directory object permissions | Validate delegated rights |
+| ObjectProps | Directory object properties | Review SPNs and account configuration |
+| LocalGroup / LocalAdmin | Host-local group membership | Only when specific assigned hosts and access permit |
+| Session | Observed user sessions on member computers | Only when explicitly authorized and needed |
+
+The official [SharpHound CE flags](https://bloodhound.specterops.io/collect-data/ce-collection/sharphound-flags) document `--ComputerFile` for a line-separated list of specific computer names/IPs. Use that scope control for host-specific collection when needed rather than querying every computer. A missing local-admin/session edge in a DCOnly collection is an **information gap**, not proof that the relationship does not exist. Permission failures and stale session observations also affect coverage.
+
+#### Step 5 — Import the dataset
+
+In authorized practice labs, move the generated ZIP to your private local BloodHound instance only using an approved method. In the actual exam, obey the OffSec file-download exception above; a collector being allowed does not authorize unrestricted downloading. Use only the necessary data, and never upload exam data to third-party services.
+
+In BloodHound CE:
+
+1. Open Administration > Data Collection > File Ingest.
+2. Select Upload File(s) and choose the collected ZIP or compatible JSON files.
+3. Wait for the import status to finish successfully.
+4. Open Explore and search for the assigned account, such as STUDENT@EXAMPLE.LAB.
+5. Click the node and inspect group memberships, outbound relationships, inbound relationships, object properties and collection timestamps.
+
+The Legacy interface uses its own compatible import workflow. Avoid importing the same dataset repeatedly into unrelated graphs.
+
+#### Step 6 — Interpret the graph rather than following it blindly
+
+In Explore, start from your known account, review its groups, and use Pathfinding to inspect a route to an actual in-scope objective. For a lab exercise you may select the relevant administrative group or assigned computer as the destination. Inspect each edge individually and read the explanation provided by BloodHound.
+
+| Edge or property | Meaning to verify manually |
+| --- | --- |
+| MemberOf | Direct/nested group membership and resulting rights |
+| AdminTo | Indicated local-administrator relationship; confirm current access |
+| CanRDP / CanPSRemote | Relevant local group/remote management relationship; check actual host configuration |
+| GenericAll / GenericWrite | Broad object permissions; identify the exact affected object and effective ACL |
+| WriteDacl / WriteOwner | Permission to modify ACL/ownership; verify effective rights |
+| AddMember | Ability to change a particular group's membership; assess scope and prerequisites |
+| HasSession | Observed user session; may be stale or incomplete |
+| SPN / preauth property | Possible Kerberos password-auditing lead, not a recovered password |
+| Delegation-related edge | Configured delegation relationship; check service, identity and effective permissions |
+
+Use the built-in query library or node properties to review groups, SPN-bearing accounts, preauthentication-disabled users, and delegation relationships where the relevant data is available. Cross-check these against the native LDAP/PowerShell commands in section 4. Shortest graph path does not necessarily mean easiest or feasible path: network routing, account policy, privileges, service availability and collection age can invalidate it.
+
+#### Step 7 — Troubleshoot and record results
+
+| Problem | Check first |
+| --- | --- |
+| Collector cannot locate domain | DNS SRV, DC FQDN, assigned domain, VPN route |
+| LDAP bind fails | Current identity, credentials, signing/LDAPS requirements |
+| ZIP missing | Output directory, collector errors, filesystem permissions |
+| Import fails | SharpHound/BloodHound version compatibility and ZIP/JSON integrity |
+| No graph path | Missing collection methods, wrong source/destination, incomplete permissions |
+| Edge disagrees with manual test | Collection age, actual token, nested groups, effective ACL, target availability |
+
+Record the scope, collection command, tool version, data timestamp, missing collection methods, current identity, candidate relationship and manual validation result. Do not use an empty graph to conclude that the target is secure. Do not store raw directory datasets, ticket material, credentials or actual exam evidence in this repository.
+
+**Next:** [AD Attack Paths](./ad-attack-paths.md) explains how to turn verified relationships into a prioritized plan, and includes the offline Kerberos hash-auditing workflow.
 
 ## 6. Credentialed enumeration workflow
 
@@ -278,6 +379,7 @@ For visual relationship analysis, tools such as BloodHound may be useful in trai
 - [ ] Current TGT/TGS cache checked where available; preauth-disabled accounts, SPN-bearing users and delegation candidates enumerated.
 - [ ] Rubeus/Mimikatz used only as needed and in line with current exam restrictions; no secret ticket material stored publicly.
 - [ ] Effective access and delegated relationships evaluated.
+- [ ] If using SharpHound/BloodHound, recorded the authorized collection scope, imported matching-version data privately, and manually checked relevant graph edges.
 - [ ] Suspected AD attack path written as evidence + preconditions.
 - [ ] No secrets or exam evidence committed publicly.
 
@@ -294,3 +396,6 @@ For visual relationship analysis, tools such as BloodHound may be useful in trai
 - [Microsoft UserAccountControl flags](https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/useraccountcontrol-manipulate-account-properties)
 - [Rubeus official project](https://github.com/GhostPack/Rubeus)
 - [Mimikatz official project](https://github.com/gentilkiwi/mimikatz)
+
+- [BloodHound CE quickstart](https://bloodhound.specterops.io/get-started/quickstart/community-edition-quickstart)
+- [SharpHound CE collection flags](https://bloodhound.specterops.io/collect-data/ce-collection/sharphound-flags)
