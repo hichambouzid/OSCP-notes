@@ -39,11 +39,15 @@ Network reachability does not establish authorization. Use only the assigned cre
 
 ## 2. AS-REP roasting — precondition triage
 
+**Enumeration first:** [AS-REP account checks](./ad-enumeration.md#43-as-rep-roasting--enumerate-preauthentication-disabled-accounts) includes native PowerShell, LDAP and PowerView queries. Look for enabled accounts with DONT_REQ_PREAUTH (4194304). No SPN is required. The AS-REP encrypted response portion, not the KRBTGT-encrypted TGT, is the relevant password-auditing material. The flag establishes exposure, not password recovery.
+
 **What must be true:** An in-scope account has Kerberos preauthentication disabled, and the environment permits a request for that account. Determine whether the account and policy are actually relevant first. Requests for ticket material and any offline cracking must stay within the lab authorization. Do not run this across real user directories.
 
 **Investigate:** Which specific object has the flag? Is it a service/normal user? Is it within scope? Would exploiting that identity contribute to the next objective?
 
 ## 3. Kerberoasting — precondition triage
+
+**Enumeration first:** [SPN-bearing account checks](./ad-enumeration.md#44-kerberoasting--enumerate-spn-bearing-accounts) identifies account ownership, enabled status and password age. Rubeus `kerberoast /stats` enumerates statistics without requesting roasting tickets. Both AES and RC4 may be relevant; a service ticket does not demonstrate a weak password.
 
 **What must be true:** A service account has an SPN and you possess an authorized domain identity capable of requesting relevant service tickets. A returned ticket is not a guaranteed weak password. Avoid large indiscriminate ticket requests or credential attacks without scope.
 
@@ -52,6 +56,27 @@ setspn -T example.lab -Q */*
 ~~~
 
 Document the account, service, ticket type and whether any legitimate path exists independent of password recovery. If practicing offline auditing, see [Password Auditing](../06-Passwords/password-auditing.md).
+
+## 3A. Kerberos ticket and delegation decision guide
+
+Start with [current ticket inspection](./ad-enumeration.md#42-check-kerberos-connectivity-and-your-current-tickets) and [Rubeus/Mimikatz inspection](./ad-enumeration.md#45-rubeus-and-mimikatz--ticket-inspection). These commands are for checking your authorized session and directory exposure.
+
+| Technique | Necessary condition / evidence | What not to assume |
+| --- | --- | --- |
+| AS-REP roasting | Enabled identity with preauthentication disabled | The account password is weak |
+| Kerberoasting | Relevant SPN-bearing identity and a permissible service-ticket request | An SPN proves credential recovery |
+| Pass-the-Ticket | Valid ticket and applicable session/realm/service scope | A ticket automatically grants admin access |
+| Pass-the-Hash | Relevant NTLM credential and service accepting that authentication | This is the same as Kerberos ticket authentication |
+| Unconstrained delegation | Relevant trusted service/computer and applicable Kerberos context | Every trusted computer is an immediate path |
+| Constrained delegation | A relevant service and configured delegation target SPN; applicable protocol transition settings | Delegation to arbitrary services is permitted |
+| Resource-based constrained delegation | Resource's delegation security descriptor and relevant effective principal rights | The presence of a descriptor alone establishes exploitability |
+| Golden Ticket | Compromise of the domain KRBTGT key | A normal user's TGT provides the KRBTGT key |
+| Silver Ticket | Compromise of the relevant service identity key | A service ticket provides its service account's key |
+| DCSync | Effective directory replication rights over the relevant domain naming context | Any domain account can replicate credentials |
+
+Golden/Silver Ticket and DCSync are higher-impact post-compromise topics, not first-line enumeration tasks. Distinguish authentication from authorization at every step. A valid ticket does not prove the current identity can access a particular administrative service.
+
+**Tool choice:** Windows klist is the fastest first check. Rubeus is useful for Kerberos-specific metadata and SPN statistics. Mimikatz offers Kerberos inspection in addition to other sensitive capabilities; listing your own session's tickets does not require credential dumping, ticket export, or injection. The [official OSCP+ FAQ](https://help.offsec.com/hc/en-us/articles/4412170923924-OSCP-Exam-FAQ) names both Rubeus and Mimikatz as allowed, subject to feature restrictions in the exam guide.
 
 ## 4. Object and ACL-based paths
 
@@ -111,5 +136,6 @@ Note evidence of Kerberos delegation configurations, service accounts, certifica
 ## References
 
 - [Microsoft Active Directory security](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/)
+- [OffSec OSCP+ Exam FAQ](https://help.offsec.com/hc/en-us/articles/4412170923924-OSCP-Exam-FAQ)
 - [Microsoft Kerberos](https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-authentication-overview)
 - [OffSec OSCP+ Exam Guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide)
