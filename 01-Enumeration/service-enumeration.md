@@ -489,71 +489,207 @@ snmpwalk -v2c -c COMMUNITY "$IP" 1.3.6.1.2.1.2.2.1.2
 Both commands require a supplied or expressly approved community. Confirm the actual UDP port and version and record retrieved values without publishing sensitive management data.
 ## 7. SMTP — Mail service (25/465/587)
 
+SMTP transfers/submits mail; it does not provide mailbox browsing or a remote shell. Use POP3/IMAP for authorized mailbox access (see section 11.3).
+
+| Port | Typical purpose | Connection |
+| --- | --- | --- |
+| 25/tcp | Server-to-server SMTP | Plain SMTP, optionally STARTTLS |
+| 465/tcp | Secure submission | Implicit TLS from connection start |
+| 587/tcp | Client submission | Usually SMTP followed by STARTTLS |
+
+Use the actual discovered port, including nonstandard listeners. Commands below use illustrative lab addresses and identities only.
+
+### Step 1 — Fingerprint the service
+
 ```bash
+nmap --script-help smtp-commands
 sudo nmap -Pn -sV -p 25,465,587 --script smtp-commands -oA scans/smtp-info "$IP"
 ```
 
-Review supported SMTP commands, TLS options, banner information and mail domain configuration. Do not send unsolicited mail or perform large-scale address guessing.
+Replace the example port list with confirmed SMTP listeners. Identify the greeting, server product/version (Postfix, Exim, Sendmail, Microsoft Exchange, etc.), hostname, mail domain and advertised extensions. A banner is a research lead, not proof of a vulnerable build.
 
-### Practical SMTP enumeration — commands and interpretation
+### Step 2 — Connect manually
 
-SMTP is a **mail transport protocol**, not a remote file browser. You can inspect the server's greeting and supported commands without sending a message.
-
-**Plain SMTP on port 25** (when permitted):
+**Plain SMTP (usually port 25):**
 
 ```bash
 nc -nv "$IP" 25
+# Alternative:
+telnet "$IP" 25
 ```
 
-At the SMTP prompt, enter:
+Wait for the `220` greeting before entering commands, one line at a time:
 
 ```text
 EHLO kali.lab
+HELP
+NOOP
 QUIT
 ```
 
-Typical responses include `220` (service greeting), `250` (command accepted / advertised capabilities), `500/502` (unknown or unsupported command), and `530` (authentication required).
+If EHLO is unsupported, try `HELO kali.lab` (HELO does not advertise ESMTP extensions). Use the actual lab-assigned client name if required. If a server requires CRLF line endings, use Telnet or the printf example below.
 
-**STARTTLS on port 587**, if advertised:
+**STARTTLS (usually 587, sometimes 25):**
 
 ```bash
 openssl s_client -starttls smtp -connect "$IP:587" -crlf
+# For an SMTP listener on 25 advertising STARTTLS:
+openssl s_client -starttls smtp -connect "$IP:25" -crlf
 ```
 
-After the TLS handshake, type `EHLO kali.lab` and then `QUIT`. For implicit TLS on port 465:
+**Implicit TLS (usually 465):**
 
 ```bash
 openssl s_client -connect "$IP:465" -crlf
 ```
 
-After the implicit TLS handshake, send `EHLO kali.lab` and `QUIT` in the encrypted session. For STARTTLS, the SMTP capabilities may change after upgrading to TLS, so repeat `EHLO` after the handshake.
+After the handshake type `EHLO kali.lab`, inspect the new capabilities and use `QUIT` to exit. Repeat EHLO after STARTTLS because capabilities can change. Do not manually type STARTTLS into a plain Netcat session and expect to continue in plaintext: the next bytes must be a TLS handshake.
 
-Inspect the certificate, hostname, server greeting, `EHLO` extensions, and whether STARTTLS and AUTH are advertised. `AUTH` being advertised does not mean anonymous login is possible.
-
-To save a non-authenticating SMTP capability check on plaintext port 25 (some servers close connections or require a valid hostname):
+**Capture a capability transcript (plaintext port):**
 
 ```bash
 printf 'EHLO kali.lab\r\nQUIT\r\n' | nc -w 5 "$IP" 25 | tee scans/smtp-ehlo.txt
 ```
 
-**Do not** attempt open-relay testing by delivering mail to third parties, bulk recipient guessing, or unsolicited messages. SMTP generally does not let you list mailboxes or download emails. Mailbox access uses separate protocols such as POP3 or IMAP with authorized credentials.
+If pipelining or immediate EOF causes a missing response, use the interactive session instead and wait for each reply.
 
+### Step 3 — SMTP commands and response codes
 
-### SMTP — potential checks to test
+| Command | Purpose |
+| --- | --- |
+| EHLO / HELO | Introduce client; EHLO lists ESMTP extensions |
+| HELP | Request supported commands/help (server-dependent) |
+| NOOP | Check whether the session is responsive |
+| VRFY user | Request verification of an approved test identity |
+| EXPN alias | Request expansion of an approved test alias/list |
+| MAIL FROM:<address> | Set envelope sender |
+| RCPT TO:<address> | Set envelope recipient |
+| RSET | Cancel the current envelope transaction |
+| DATA | Begin message content; not needed for basic enumeration |
+| QUIT | End session |
 
-- **Banner/EHLO:** enumerate capabilities (`STARTTLS`, `AUTH`, `VRFY`, `EXPN`, `SIZE`, NTLM) and server/domain names; `EHLO` is not an authentication attempt.
-- **TLS:** compare advertised STARTTLS support on the actual port with TLS certificate details; a server may hide `AUTH` until TLS is negotiated.
-- **User enumeration:** if `VRFY`/`EXPN` are advertised, test **at most an explicitly supplied lab identity** when permitted. Do not run bulk recipient guessing, `smtp-enum-users` wordlists, or password spraying.
-- **Open relay:** an EHLO capability list cannot prove relay. Only perform a controlled relay test when the lab **explicitly authorizes** it and the sender/recipient/test destination are owned by the lab; avoid delivering real messages or using third-party addresses.
-- **AD clues:** if NTLM is advertised, targeted `smtp-ntlm-info` may disclose host/domain/build details; inspect `nmap --script-help smtp-ntlm-info` first.
+| Reply | Interpretation |
+| --- | --- |
+| 220 | Service ready; also used when STARTTLS can begin |
+| 250 / 251 | Command accepted / recipient may be forwarded |
+| 252 | Cannot verify user but may accept mail; inconclusive for enumeration |
+| 334 | Authentication challenge |
+| 235 | Authentication successful |
+| 354 | Ready to receive message data (not a delivery confirmation) |
+| 421 / 450 / 451 / 452 | Temporary failure, rate limiting or other transient condition |
+| 500 / 502 | Unknown or unimplemented command |
+| 503 | Bad command sequence |
+| 530 / 538 | Authentication or encryption required (read full reply) |
+| 535 | Authentication failed |
+| 550 / 553 / 554 | Rejected by mailbox, syntax, relay or policy rules; read full reply |
 
-```bash
-nmap --script-help smtp-commands
-sudo nmap -Pn -sV -p 25 --script smtp-commands "$IP"  # Replace with discovered SMTP port
-printf 'EHLO kali.lab\r\nQUIT\r\n' | nc -w 5 "$IP" 25
+A 250 response to EHLO does not imply authentication or relay access. A 550 response to RCPT is not always proof that a mailbox does not exist.
+
+### Step 4 — User verification (VRFY / EXPN / RCPT TO)
+
+Only in an authorized lab, compare a known supplied test mailbox with a single deliberately nonexistent lab control address, if the scope permits. Do not bulk-guess users or spray passwords.
+
+```text
+EHLO kali.lab
+VRFY student
+VRFY no-such-test-user
+EXPN lab-test-list
+QUIT
 ```
 
-**Record:** server banner, auth policy, advertised commands, STARTTLS, domain names and precisely what was **not** verified (e.g. relay not tested). For mailbox access, see the POP3/IMAP section below.
+Replace all sample identities with approved lab values; skip EXPN if no test alias/list is assigned. A 250 reply may reveal a canonical mailbox, while 252 or identical replies to both controls are inconclusive. Some servers disable these commands or deliberately conceal user existence.
+
+If VRFY is unavailable, compare RCPT replies for the same approved test mailbox and negative control in separate envelope transactions:
+
+```text
+EHLO kali.lab
+MAIL FROM:<sender@example.lab>
+RCPT TO:<student@example.lab>
+RSET
+MAIL FROM:<sender@example.lab>
+RCPT TO:<no-such-test-user@example.lab>
+RSET
+QUIT
+```
+
+Use an approved sender and recipients in the assigned domain. Stop before DATA; no message is submitted. Different responses may suggest username disclosure, but catch-all mailboxes, recipient validation, greylisting and policy can cause false positives. Record full replies and confirm against the known controls.
+
+### Step 5 — TLS, authentication and certificate checks
+
+Look for STARTTLS, AUTH (e.g. PLAIN, LOGIN, NTLM), SIZE, PIPELINING and other EHLO extensions. Compare the pre-TLS and post-TLS capability lists. AUTH offered before TLS is a potential configuration issue; advertising AUTH does not prove plaintext authentication is accepted or that credentials are weak.
+
+```bash
+# Use the actual assigned mail hostname for SNI and certificate identity checks
+export MAILHOST=mail.example.lab
+openssl s_client -starttls smtp -connect "$IP:587" -servername "$MAILHOST" -verify_hostname "$MAILHOST" -crlf
+# Inspect supported TLS versions/ciphers on a confirmed TLS-capable listener
+nmap --script-help ssl-enum-ciphers
+sudo nmap -Pn -sV -p 587 --script ssl-cert,ssl-enum-ciphers "$IP"
+```
+
+Use the appropriate port and TLS mode; cipher enumeration makes multiple handshakes. Check certificate subject/SAN, expiry, trust chain, hostname match and supported TLS versions. A lab self-signed certificate is not automatically exploitable.
+
+If supplied SMTP credentials are in scope, validate only that account over TLS using an approved client. Never submit real credentials via plaintext SMTP or commit passwords/Base64 AUTH strings (Base64 is not encryption).
+
+### Step 6 — Open relay policy (optional, explicitly authorized lab only)
+
+An open relay accepts unauthenticated mail from a nonlocal sender for a nonlocal recipient. A server accepting mail for its own local domain is normal and not proof of relay.
+
+If the lab explicitly authorizes this test and both nonlocal test domains are controlled by the lab, start an unauthenticated SMTP session and perform only the envelope phase:
+
+```text
+EHLO kali.lab
+MAIL FROM:<sender@source.example.lab>
+RCPT TO:<recipient@destination.example.lab>
+RSET
+QUIT
+```
+
+Use actual authorized test domains that are nonlocal to the target server; the illustrative names are not real destinations. Do not use third-party addresses, spoof identities or send unsolicited messages. Do not enter DATA for this check. A 550/554 relay-denied reply generally indicates relay controls; 250 at RCPT only indicates preliminary acceptance and is not proof of delivery. Document as a relay-policy lead unless a separately authorized controlled end-to-end test confirms delivery. Never perform spoofing or relay abuse in the exam.
+
+### Step 7 — Host/domain clues and vulnerability research
+
+If AUTH NTLM is advertised, a targeted NTLM information check may disclose host, domain, DNS names or OS build information:
+
+```bash
+nmap --script-help smtp-ntlm-info
+sudo nmap -Pn -sV -p 25 --script smtp-ntlm-info "$IP"
+```
+
+Replace 25 with the actual SMTP port and use the appropriate TLS-capable listener if required. Correlate the result with DNS, SMB, LDAP and [AD Enumeration](../05-Active-Directory/ad-enumeration.md); host/domain disclosure is not authentication bypass.
+
+If the lab DNS server and domain are assigned, check mail records:
+
+```bash
+dig @"$DNS_IP" example.lab MX
+dig @"$DNS_IP" example.lab TXT
+dig @"$DNS_IP" _dmarc.example.lab TXT
+```
+
+Set DNS_IP to the assigned DNS server and replace example.lab with the actual lab domain. MX records can identify related mail hosts; SPF/DMARC records provide mail policy clues, not a foothold. Keep further discovery within scope.
+
+For a version-related lead, search for the actual product/version, then review vendor advisories and patch/configuration prerequisites:
+
+```bash
+searchsploit "Postfix"
+searchsploit "Exim"
+```
+
+These are example research terms, not an instruction to run exploits. Do not run broad vulnerability or brute-force NSE categories. Check the [official OffSec exam rules](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) before the exam.
+
+### SMTP exam/lab checklist
+
+- [ ] Identify every SMTP listener and its actual port, version, greeting and hostname.
+- [ ] Connect with Netcat/Telnet or OpenSSL as appropriate; capture EHLO.
+- [ ] Check STARTTLS/implicit TLS, certificate and pre/post-TLS AUTH capabilities.
+- [ ] Compare approved positive/negative user controls using VRFY or RCPT where authorized; record ambiguous outcomes.
+- [ ] Check relay policy only in an explicitly authorized lab; stop before DATA for envelope-only testing.
+- [ ] If NTLM is offered, collect host/domain clues and correlate with other discovered services.
+- [ ] Research exact server version and patch/configuration prerequisites.
+- [ ] Keep transcripts private; record what was verified, rejected or not tested. Never commit credentials, mailbox data or real exam evidence.
+
+**Next:** If SMTP reveals a credible identity or domain, correlate it with other in-scope services. A mail port alone is not a foothold.
+
 ## 8. NFS — Network File System (111/2049)
 
 ```bash
