@@ -206,12 +206,46 @@ rpcclient -U "" -N "$IP" -c 'srvinfo'
 If denied, record the restriction; do not brute credentials. For Windows patch/CVE leads, confirm exact OS/build and whether the vulnerable SMB protocol or configuration is actually enabled.
 
 **Record:** actual access level per share, signing, dialects, host/domain, and sanitized evidence. See [AD Enumeration](../05-Active-Directory/ad-enumeration.md) for credentialed domain relationships.
-## 3. FTP — File Transfer Protocol (21)
+## 3. FTP — File Transfer Protocol (21/990)
+
+| Port | Typical service | Transport |
+| --- | --- | --- |
+| 21/tcp | FTP control connection | Plain FTP or explicit FTPS (AUTH TLS) |
+| 20/tcp | Traditional active-mode FTP data | Server-initiated data connection |
+| 990/tcp | Implicit FTPS control connection | TLS from connection start |
+| 22/tcp | SFTP | SSH file-transfer subsystem, not FTP/FTPS |
+
+FTP uses separate control and data connections. Passive FTP usually negotiates a separate high-numbered data port; port 20 is not required for every session. Use the actual discovered port and identify the protocol before choosing a client.
+
+### Step 1 — Identify the service and connect
 
 ```bash
 sudo nmap -Pn -sV -p 21 --script ftp-anon,ftp-syst -oA scans/ftp-info "$IP"
 ftp "$IP"
+# Nonstandard FTP listener:
+ftp "$IP" 2121
+# Inspect the greeting without logging in:
+nc -nv "$IP" 21
+# Alternative control-channel connection:
+telnet "$IP" 21
 ```
+
+For an interactive Netcat/Telnet connection, wait for the `220` greeting, then type the following commands one at a time:
+
+```text
+FEAT
+SYST
+HELP
+QUIT
+```
+
+FEAT may show AUTH TLS, EPSV, UTF8, MLSD and other features; SYST identifies the reported system type; HELP lists available commands. None proves a vulnerability. If Netcat requires CRLF, use Telnet or the transcript command:
+
+```bash
+printf 'FEAT\r\nSYST\r\nQUIT\r\n' | nc -w 5 "$IP" 21 | tee scans/ftp-banner.txt
+```
+
+If replies are missing, use the interactive connection and wait after each command. Netcat is useful for the control channel but does not manage FTP data transfers.
 
 Check whether anonymous login is enabled and, if authorized, what files are readable. Do not modify or upload files without a specific reason and permission.
 
@@ -234,15 +268,13 @@ ftp> pwd
 ftp> ls
 ftp> cd pub
 ftp> dir
-ftp> binary
-ftp> get readme.txt
 ftp> bye
 ```
 
 | FTP command | Purpose |
 | --- | --- |
 | `pwd` | Show the current remote FTP directory |
-| `ls` or `dir` | List remote files and directories |
+| `ls` | List remote files and directories |
 | `dir` | Request a detailed listing (server-dependent) |
 | `cd pub` | Enter the remote `pub` directory if it exists |
 | `cd ..` | Move to the parent remote directory |
@@ -251,6 +283,77 @@ ftp> bye
 | `get filename` | Download one readable remote file |
 | `mget *.txt` | Download matching files (may prompt for each) |
 | `bye` | Disconnect |
+
+### Step 2 — Check authenticated access and directory permissions
+
+For an assigned lab account, use an interactive FTP client and enter the supplied username/password only when the connection is appropriately protected. Prefer FTPS or SFTP for sensitive credentials. Do not try default passwords, brute-force or spray credentials.
+
+```text
+ftp> pwd
+ftp> ls
+ftp> dir
+ftp> cd pub
+ftp> pwd
+ftp> cd ..
+ftp> bye
+```
+
+Replace pub with an actual discovered directory. Note which directories can be listed or entered, whether files are exposed to anonymous users, and whether an approved account has broader access. A visible filename or Unix-style permissions in LIST output does not prove it can be downloaded or written.
+
+For a separate authorized practice lab, if an upload test is explicitly allowed, use a harmless unique marker in the designated test directory and remove it afterward:
+
+```bash
+# Kali: create a harmless unique marker; no executable content
+printf 'Authorized FTP permission test\n' > ftp-lab-marker.txt
+ftp "$IP"
+```
+
+After logging in and confirming the designated writable directory:
+
+```text
+ftp> pwd
+ftp> ls
+ftp> binary
+ftp> put ftp-lab-marker.txt
+ftp> ls
+ftp> delete ftp-lab-marker.txt
+ftp> bye
+```
+
+Use a unique filename that does not already exist; never overwrite existing files. Verify cleanup and remove the local marker when done. Skip this test when uploads or deletion are not explicitly permitted. If a directory appears connected to a web root, compare an approved harmless marker with its expected HTTP URL only if authorized. A writable FTP directory or HTTP-accessible marker is not proof of code execution.
+
+### Step 3 — Check FTPS / TLS
+
+Explicit FTPS starts on a plain FTP control channel and upgrades with AUTH TLS; implicit FTPS starts with TLS immediately. FTPS is not SFTP.
+
+```bash
+# Explicit FTPS on the actual FTP listener
+openssl s_client -starttls ftp -connect "$IP:21" -crlf
+# Implicit FTPS
+openssl s_client -connect "$IP:990" -crlf
+```
+
+After a successful TLS handshake, use FEAT, SYST and QUIT. For certificate identity, use the assigned DNS hostname (illustrative example):
+
+```bash
+export FTPHOST=ftp.example.lab
+openssl s_client -starttls ftp -connect "$IP:21" -servername "$FTPHOST" -verify_hostname "$FTPHOST" -crlf
+nmap --script-help ssl-enum-ciphers
+sudo nmap -Pn -sV -p 21 --script ssl-cert,ssl-enum-ciphers "$IP"
+```
+
+Use the correct TLS mode/port, and substitute the assigned hostname. The TLS scanner performs multiple handshakes. Record certificate subject/SAN, expiry, trust and hostname match; compare TLS protocols and ciphers.
+
+An FTP-capable TLS client can also list a directory over explicit FTPS using an assigned account:
+
+```bash
+# curl prompts for the password when only a username is supplied
+curl --ssl-reqd --user USERNAME "ftp://$FTPHOST:21/"
+# Implicit FTPS
+curl --user USERNAME "ftps://$FTPHOST:990/"
+```
+
+Use the assigned username and a hostname that resolves to the target. Do not disable certificate verification for real credentials. The trailing slash requests a directory listing; the examples do not download a target file. Plain FTP exposes credentials and data; TLS support alone does not guarantee that encryption is required or that the data channel is protected.
 
 ### Inspect remote FTP files — practice downloads only
 
@@ -305,6 +408,25 @@ ftp> bye
 
 `prompt` toggles interactive confirmation for multi-file transfers; check its current state before using it. Use `mget` only for files in scope; it does not recursively download entire directory trees.
 
+### Step 4 — Interpret FTP response codes and troubleshoot
+
+| Code | Meaning |
+| --- | --- |
+| 220 | Service ready / greeting |
+| 230 | Login successful |
+| 331 | Username accepted for next authentication step; password required (not proof the user exists) |
+| 150 / 125 | Data transfer/listing opening |
+| 226 | Data transfer/listing completed |
+| 227 / 229 | Passive / extended passive data connection information |
+| 234 | AUTH TLS accepted; TLS handshake follows |
+| 421 | Service unavailable or closing connection |
+| 425 / 426 | Data connection could not open / transfer aborted |
+| 500 / 502 | Command unknown or unimplemented |
+| 530 | Login required or authentication failed |
+| 550 | File unavailable, permission denied or policy rejection |
+
+**Active vs passive FTP:** In passive mode (PASV/EPSV), the client initiates the data connection to the negotiated server port. In active mode (PORT/EPRT), the server initiates the data connection back to the client. If login works but ls/dir hangs, prefer passive mode and check the VPN route/firewall. Only toggle active mode if appropriate for the assigned lab; do not use PORT to direct connections to other hosts or test FTP bounce against third parties.
+
 ### Troubleshooting FTP access
 
 - **530 Login incorrect:** Anonymous access may be disabled, restricted, or require a different password format.
@@ -317,7 +439,7 @@ ftp> bye
 
 Look for backups, configuration files, web-root content and version clues. A banner version is a lead for research, not proof of a CVE.
 
-### FTP — potential checks to test
+### Step 5 — Security checks and vulnerability research
 
 - **Anonymous login:** check once, then list the assigned directory with `pwd`, `ls`, `dir` (no download required). Record whether guest access is readable or restricted.
 - **Permissions:** can your supplied test account list the directory? Is a sensitive backup/configuration **name** exposed? Test write privileges only if the lab explicitly authorizes a harmless upload and cleanup.
@@ -329,6 +451,27 @@ Look for backups, configuration files, web-root content and version clues. A ban
 # Read-only fingerprint; replace 21 with the actual discovered FTP port
 sudo nmap -Pn -sV -p 21 --script ftp-anon,ftp-syst "$IP"
 ```
+
+**Version research (examples only):**
+
+```bash
+searchsploit "vsftpd"
+searchsploit "ProFTPD"
+searchsploit "Pure-FTPd"
+```
+
+Use the actual identified product/version. Review vendor advisories, distro backports, enabled modules and authentication requirements. An FTP banner or SearchSploit match does not demonstrate an exploitable service.
+
+**FTP exam/lab checklist**
+
+- [ ] Identify the actual FTP/FTPS service, port, banner and version; do not confuse it with SFTP.
+- [ ] Test anonymous access once when in scope; distinguish successful login from actual directory access.
+- [ ] Inspect permitted directory listings, backup/configuration filenames and suspected web-root relationships.
+- [ ] Record plaintext/TLS support, authentication policy and certificate details.
+- [ ] Test writes only in an expressly approved lab location with a harmless unique marker and cleanup.
+- [ ] Investigate passive/active data connection issues and record the full FTP response codes.
+- [ ] Verify product/version and patch prerequisites before treating any CVE as a finding.
+- [ ] Keep target evidence private and document the next step.
 
 **Exam reminder:** `get`, `mget`, `curl -o` and similar file transfers **download target files to Kali**. OffSec permits that only when necessary to compromise the target, and requires deletion after objectives. Directory listings and in-place reading are preferable.
 ## 4. SSH — Secure Shell (22)
