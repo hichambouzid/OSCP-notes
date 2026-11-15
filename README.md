@@ -19,16 +19,31 @@ A practical, **exam-focused study reference** for authorized OSCP labs and penet
 | 01 | [SMBClient Cheat Sheet](01-Enumeration/smbclient.md) | Share access, guest/domain authentication, downloads, uploads and troubleshooting |
 | 02 | [Web Enumeration](02-Web-Application/web-enumeration.md) | FFUF, subdomains, CVEs, SQLi, LFI, uploads, command injection, XSS, IDOR, SSRF, SSTI and more |
 | 02 | [Web Vulnerability Testing](02-Web-Application/web-vulnerability-testing.md) | Manual vulnerability-verification methodology |
+| 03 | [HTTP and File Transfer](03-Initial-Access/file-transfer.md) | Start HTTP server on Kali, transfer to Linux/Windows, SCP and troubleshooting |
 | 03 | [Initial Access](03-Initial-Access/initial-access.md) | Verified entry points, shell context and evidence |
 | 04 | [Linux Privilege Escalation](04-Privilege-Escalation/linux-privesc.md) | Sudo, SUID, capabilities, cron, services and writable paths |
-| 04 | [Windows Privilege Escalation](04-Privilege-Escalation/windows-privesc.md) | Token privileges, services, ACLs, tasks and application paths |
+| 04 | [Windows Privilege Escalation](04-Privilege-Escalation/windows-privesc.md) | Token privileges, services, ACLs, tasks, PuTTY, WinSCP and application configuration |
 | 05 | [Active Directory Enumeration](05-Active-Directory/ad-enumeration.md) | DC/DNS, accounts, groups, shares, SPNs and relationships |
-| 05 | [AD Attack-Path Validation](05-Active-Directory/ad-attack-paths.md) | Credentialed access, SPN/ACL/delegation preconditions and lateral movement |
+| 05 | [AD Attack-Path Validation](05-Active-Directory/ad-attack-paths.md) | Credentialed access, SPN/ACL/delegation, Kerberos hash-mode table and offline auditing |
 | 06 | [Password and Hash Auditing](06-Passwords/password-auditing.md) | Identify formats, John/Hashcat offline practice, lockout safety |
-| 07 | [Pivoting and Tunneling](07-Pivoting/pivoting-tunneling.md) | SSH -L/-D/-R/-J, SOCKS, route checks and troubleshooting |
+| 07 | [Pivoting and Tunneling](07-Pivoting/pivoting-tunneling.md) | SSH -L/-D/-R/-J, SOCKS, ProxyChains, Chisel, Ligolo-ng, route checks and cleanup |
 | 08 | [Exam Methodology](08-Exam-Workflow/exam-methodology.md) | Target workflow, scoring changes, proof requirements and restrictions |
 | 08 | [Reporting](08-Exam-Workflow/reporting.md) | Evidence templates, screenshots, PDF, 7z and final submission |
 | 09 | [Practice Lab Writeup Template](09-Lab-Writeups/README.md) | Sanitized learning journal for your authorized practice boxes |
+
+## Find the command you need
+
+| If you are stuck at... | Open this section |
+| --- | --- |
+| No services / incomplete scan | [Full TCP and UDP workflow](01-Enumeration/nmap.md) |
+| Known credential but no shell | [Credentialed initial access](03-Initial-Access/initial-access.md#3-path-a--use-verified-credentials-first) |
+| Need to serve a local file to a target | [HTTP server and file transfer](03-Initial-Access/file-transfer.md) |
+| Linux low-privilege shell | [Linux escalation playbook](04-Privilege-Escalation/linux-privesc.md#9-practical-privilege-escalation-playbook) |
+| Windows low-privilege shell / PuTTY | [File and registry permissions](04-Privilege-Escalation/windows-privesc.md#5-file-and-registry-permissions) |
+| AD user, SPN or ticket material | [AD enumeration](05-Active-Directory/ad-enumeration.md) and [Kerberos offline audit](05-Active-Directory/ad-attack-paths.md#3b-offline-password-auditing--as-rep-and-tgs-hashes) |
+| Unknown hash format | [Password auditing](06-Passwords/password-auditing.md) |
+| Internal host unreachable | [Pivoting decision sheet](07-Pivoting/pivoting-tunneling.md#4a-pivoting-decision-sheet--choose-the-simplest-working-route) |
+| Proof or report | [Reporting](08-Exam-Workflow/reporting.md) |
 
 ## Repeatable workflow
 
