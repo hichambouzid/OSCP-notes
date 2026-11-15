@@ -1,5 +1,8 @@
 # OSCP Quick Reference — Manual Decision Sheet
 
+> **Need a faster lookup or a rehearsal?** Open the [Fast Reference Index](reference-index.md), [Hands-on Terminal Drills](../09-Lab-Writeups/hands-on-terminal-drills.md), or [Troubleshooting Cards](../08-Exam-Workflow/troubleshooting-cards.md). Run the local self-test before the exam; use these static references independently during the exam subject to OffSec rules.
+
+
 > Fast lookup for **authorized labs**. Read the full guides before using unfamiliar commands. Replace example addresses, domains, users and ports with the actual assigned target. This is a study aid, **not** a substitute for current OffSec rules.
 
 ## Start a target
