@@ -114,12 +114,53 @@ netstat -ano
 
 Use detailed [Linux](../04-Privilege-Escalation/linux-privesc.md) and [Windows](../04-Privilege-Escalation/windows-privesc.md) guides to validate actual vulnerabilities.
 
+## Initial access and file transfer
+
+Use [Initial Access](../03-Initial-Access/initial-access.md) for the verified vulnerability or assigned credential workflow. SSH, RDP, WinRM and web/SMB access have different rights; verify the resulting shell identity.
+
+**Kali — serve an authorized test file:**
+
+~~~bash
+export LHOST=192.168.45.219  # Your actual reachable VPN address
+mkdir -p "$HOME/oscp-local/transfer"
+printf 'transfer test\n' > "$HOME/oscp-local/transfer/test.txt"
+python3 -m http.server 8000 --bind "$LHOST" --directory "$HOME/oscp-local/transfer"
+~~~
+
+**Target — Linux:**
+
+~~~bash
+curl -f -o /tmp/oscp-test.txt http://192.168.45.219:8000/test.txt
+~~~
+
+**Target — Windows PowerShell:**
+
+~~~powershell
+Invoke-WebRequest -Uri 'http://192.168.45.219:8000/test.txt' -OutFile "$env:TEMP\oscp-test.txt"
+~~~
+
+Keep the Kali server running in its own terminal, serve no secrets, and stop it after use. For checksums, wget, curl.exe, SCP and connection errors see [HTTP and File Transfer](../03-Initial-Access/file-transfer.md). Target-to-Kali downloads must meet the official exam exception.
+
 ## AD, credentials and pivoting
 
 - [AD Enumeration](../05-Active-Directory/ad-enumeration.md): DNS/clock, starting credentials, users, groups, SPNs, shares, relationships.
 - [AD Attack Paths](../05-Active-Directory/ad-attack-paths.md): rights, account/host scope and one hypothesis at a time.
-- [Password Auditing](../06-Passwords/password-auditing.md): offline datasets and hash identification; avoid broad login guessing.
-- [Pivoting](../07-Pivoting/pivoting-tunneling.md): draw source → pivot → destination; use approved SSH forwards only where needed.
+- [Password Auditing](../06-Passwords/password-auditing.md): offline datasets, mode table, wordlists, synthetic test and troubleshooting; avoid broad login guessing.
+- [Kerberos hash-mode reference](../05-Active-Directory/ad-attack-paths.md#3b-offline-password-auditing--as-rep-and-tgs-hashes): RC4 and AES AS-REP/TGS formats, offline Hashcat and John workflows. A ticket is not automatically a password hash.
+- [Pivoting](../07-Pivoting/pivoting-tunneling.md): SSH -L/-D/-R/-J, SOCKS, ProxyChains, Chisel, Ligolo-ng and cleanup; draw source → pivot → assigned destination.
+
+### Pivoting: select a method
+
+| Need | Method |
+| --- | --- |
+| One internal TCP service | SSH -L |
+| Multiple TCP services | SSH -D with SOCKS5 |
+| Pivot needs local Kali HTTP | SSH -R |
+| SSH through a jump host | SSH -J |
+| Authorized pivot can connect outbound | Chisel reverse SOCKS / Ligolo-ng |
+| Specific internal IP route | Ligolo-ng TUN |
+
+Full examples: [Pivoting decision sheet](../07-Pivoting/pivoting-tunneling.md#4a-pivoting-decision-sheet--choose-the-simplest-working-route). Raw SYN, ICMP and standard UDP scans do not traverse ordinary SSH SOCKS. Metasploit cannot be used to pivot in the exam.
 
 ## Non-negotiable exam notes
 
