@@ -16,6 +16,7 @@ A practical, **exam-focused study reference** for authorized OSCP labs and penet
 | 01 | [Host Discovery](01-Enumeration/host-discovery.md) | VPN, routing, reachability, scoped host discovery |
 | 01 | [Nmap Enumeration](01-Enumeration/nmap.md) | All TCP ports, selected UDP, services, versions and triage |
 | 01 | [Service Enumeration](01-Enumeration/service-enumeration.md) | HTTP, SMB, FTP, SSH, DNS, SNMP, SMTP, NFS, RDP and databases |
+| 01 | [SMBClient Cheat Sheet](01-Enumeration/smbclient.md) | Share access, guest/domain authentication, downloads, uploads and troubleshooting |
 | 02 | [Web Enumeration](02-Web-Application/web-enumeration.md) | FFUF, subdomains, CVEs, SQLi, LFI, uploads, command injection, XSS, IDOR, SSRF, SSTI and more |
 | 02 | [Web Vulnerability Testing](02-Web-Application/web-vulnerability-testing.md) | Manual vulnerability-verification methodology |
 | 03 | [Initial Access](03-Initial-Access/initial-access.md) | Verified entry points, shell context and evidence |
