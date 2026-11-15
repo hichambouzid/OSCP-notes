@@ -62,6 +62,8 @@ ss -lnt | grep ":$LPORT " || true
 
 If the target cannot reach your VPN address, investigate routing and firewall rules before changing payloads.
 
+**Need to transfer a lab tool or harmless test file?** See [HTTP and File Transfer](./file-transfer.md) for the Kali HTTP server, Linux/Windows download commands, checksum checks and exam download restrictions. If the target is only reachable through another assigned host, see [Pivoting](../07-Pivoting/pivoting-tunneling.md).
+
 ## 3. Path A — use verified credentials first
 
 For a discovered and authorized SSH account:
