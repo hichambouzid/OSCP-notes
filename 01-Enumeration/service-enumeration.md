@@ -118,6 +118,8 @@ For paths discovered with Gobuster, request them individually and distinguish `2
 **Decision:** enumerate **every discovered web port** and hostname as its own application. Do not assume `80` and `443` are the only web listeners.
 ## 2. SMB — Windows file sharing (139/445)
 
+**Dedicated command reference:** [SMBClient practical cheat sheet](smbclient.md) — guest/domain authentication, interactive commands, selective transfers, write-access validation, protocol troubleshooting and AD examples.
+
 ### Identify configuration and shares
 
 ```bash
