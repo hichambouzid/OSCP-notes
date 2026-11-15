@@ -83,6 +83,62 @@ For a Windows lab host, valid credentials may allow RDP or another explicitly en
 
 **If login fails:** distinguish invalid credentials, disabled remote login, missing service, and network filtering. Do not start bulk password guessing.
 
+
+### Credentialed access — choose the client for the actual service
+
+A credential may authorize one service without authorizing another. Check the discovered port, account type (local or domain), required hostname, and login rights. The following examples use a lab-supplied test account; substitute actual assigned values, enter passwords interactively, and do not reuse them outside scope.
+
+**Kali → Linux SSH, including nonstandard ports:**
+
+~~~bash
+export SSH_PORT=22  # Replace with the discovered SSH port
+ssh -p "$SSH_PORT" -o ConnectTimeout=10 student@"$IP"
+~~~
+
+If the lab explicitly supplies a key, SSH supports `-i /path/to/assigned-key`. Verify the key's ownership, passphrase and intended destination first; do not copy private keys from unrelated profiles. An SSH authentication failure is different from a connection timeout or host-key mismatch.
+
+**Kali → Windows RDP, when the account has remote desktop rights:**
+
+~~~bash
+command -v xfreerdp3 || command -v xfreerdp
+# Example for FreeRDP 3 (use installed client's help if different)
+xfreerdp3 /v:"$IP:3389" /u:student /d:EXAMPLE
+~~~
+
+Use the actual discovered RDP port, domain and account; for a local account use the target's local-account context rather than assuming a domain. Confirm the server certificate/identity. RDP login can be blocked by NLA, account policy or Remote Desktop Users rights even when the password is correct.
+
+**Authorized Windows domain member → assigned Windows host via PowerShell Remoting:**
+
+~~~powershell
+$server = 'server.example.lab'
+Test-NetConnection $server -Port 5985
+$cred = Get-Credential -UserName 'EXAMPLE\student' -Message 'Assigned lab account'
+Enter-PSSession -ComputerName $server -Credential $cred
+~~~
+
+Inside the remote session:
+
+~~~powershell
+whoami
+hostname
+whoami /all
+Exit-PSSession
+~~~
+
+The target must have WinRM and an appropriate session configuration enabled; the account must be permitted to use it. Domain Kerberos normally requires the correct FQDN, DNS and time. For a service actually using HTTPS/5986, use the appropriate `-UseSSL` option and valid server certificate. Do not disable authentication, change TrustedHosts broadly or bypass certificate verification to fix an unknown failure.
+
+**SMB or application login only:** A successful SMB, database, FTP or web login is a foothold in that service's authorization context, not necessarily an operating-system shell. Continue with its specific guide: [SMBClient](../01-Enumeration/smbclient.md), [Services](../01-Enumeration/service-enumeration.md), or [Web](../02-Web-Application/web-enumeration.md).
+
+| Result | What to do next |
+| --- | --- |
+| Connection refused / timed out | Recheck actual port, route, VPN and filtering |
+| Authentication failure | Verify exact local/domain username, supplied credential and protocol; avoid repeat guesses |
+| Access denied after successful authentication | Check remote login policy, service ACL and current account rights |
+| Successful shell | Record identity/hostname, then use the OS-specific privilege guide |
+| Only file/application access | Investigate the authorized application's actual functionality and permissions |
+
+OffSec's [exam FAQ](https://help.offsec.com/hc/en-us/articles/4412170923924-OSCP-Exam-FAQ) confirms PowerShell remoting sessions count as an interactive shell. A successful login still must meet the target's specific exam objectives and proof requirements.
+
 ## 4. Path B — confirmed web command execution
 
 Use a harmless marker first in the application's verified command-execution input:
