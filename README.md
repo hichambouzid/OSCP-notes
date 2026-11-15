@@ -8,6 +8,21 @@ A practical, **exam-focused study reference** for authorized OSCP labs and penet
 
 **[Open the one-page OSCP Quick Reference](00-Quick-Reference/quick-reference.md)** — fastest entry point during practice: scan → enumerate → select a verified path → get a foothold → privilege escalate → capture evidence.
 
+## Beginner-first study desk (new)
+
+Start here if you are learning from scratch or need to refresh your memory before a mock exam. These short guides explain concepts, safe inspection commands, error interpretation, and independent practice. Keep the existing full chapters as separate references.
+
+| Guide | What it helps with |
+| --- | --- |
+| [Beginner Desk Reference](00-Quick-Reference/beginner-desk-reference.md) | Local command reminders, identity, network and terminal basics |
+| [Initial Access Concepts](03-Initial-Access/initial-access-concepts.md) | Understand finding families, prerequisites and evidence |
+| [Kerberos and AD Concepts](05-Active-Directory/kerberos-concepts.md) | Understand tickets, encryption, identities and authentication errors |
+| [Troubleshooting Cards](08-Exam-Workflow/troubleshooting-cards.md) | Diagnose which layer failed |
+| [Readiness Scorecard](08-Exam-Workflow/readiness-scorecard.md) | Independent practice, mock exam and rules |
+| [Private Target Worksheet](09-Lab-Writeups/target-review-worksheet.md) | Track facts, uncertainties and proof obligations |
+
+Before exam day, clone or update your own notes on your study machine and verify you can open them offline. From the repository directory, search the Markdown locally with `rg -n -i --glob '*.md' 'keyword' .` (or use your editor's search). Check the [official OSCP+ FAQ](https://help.offsec.com/hc/en-us/articles/4412170923924-OSCP-Exam-FAQ) for permitted resources and the [AI policy](https://help.offsec.com/hc/en-us/articles/35549468971156-AI-Usage-Policy-in-OffSec-Exams) before the exam. Do not use direct-prompt AI or share exam details with others during the exam.
+
 ## Full documentation
 
 | Chapter | Guide | Purpose |
