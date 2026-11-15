@@ -8,6 +8,20 @@ A practical, **exam-focused study reference** for authorized OSCP labs and penet
 
 **[Open the one-page OSCP Quick Reference](00-Quick-Reference/quick-reference.md)** — fastest entry point during practice: scan → enumerate → select a verified path → get a foothold → privilege escalate → capture evidence.
 
+## Practical study desk — run, verify, understand
+
+- **[Fast Reference Index](00-Quick-Reference/reference-index.md)** — find a topic or error without scrolling.
+- **[Hands-on Terminal Drills](09-Lab-Writeups/hands-on-terminal-drills.md)** — commands, expected results, interpretation, errors and cleanup.
+- **[Reference Comparison](08-Exam-Workflow/reference-comparison.md)** — comparison with community notes and a maintenance checklist.
+
+Run the local-only self-test before the exam (Python 3, standard library, synthetic data and loopback only):
+
+~~~bash
+python3 09-Lab-Writeups/local_drills.py
+~~~
+
+The test checks HTTP response interpretation, file permissions and checksums; it does not scan or exploit a target. See the hands-on guide for manual exercises and expected output. The full PEN-200 labs remain essential for independently practicing actual exam objectives.
+
 ## Beginner-first study desk (new)
 
 Start here if you are learning from scratch or need to refresh your memory before a mock exam. These short guides explain concepts, safe inspection commands, error interpretation, and independent practice. Keep the existing full chapters as separate references.
