@@ -52,7 +52,7 @@ sudo nmap -Pn -sU -p- -oA scans/udp-all "$IP"
 | 53 DNS | A/NS/SRV records, domain naming | [Services](../01-Enumeration/service-enumeration.md) |
 | 80/443/8080 Web | Headers, redirects, hosts, paths, params | [Web](../02-Web-Application/web-enumeration.md) |
 | 88 Kerberos | DC, correct time, SPNs, assigned credentials | [AD](../05-Active-Directory/ad-enumeration.md) |
-| 139/445 SMB | Shares, guest policy, assigned account access | [Services](../01-Enumeration/service-enumeration.md) |
+| 139/445 SMB | Shares, guest policy, assigned account access | [SMBClient](../01-Enumeration/smbclient.md) / [Services](../01-Enumeration/service-enumeration.md) |
 | 389/636 LDAP | Bind policy, groups/computers with assigned creds | [AD](../05-Active-Directory/ad-enumeration.md) |
 | 161 UDP SNMP | Authorized community and system metadata | [Services](../01-Enumeration/service-enumeration.md) |
 | 2049 NFS | Exports and access rules | [Services](../01-Enumeration/service-enumeration.md) |
