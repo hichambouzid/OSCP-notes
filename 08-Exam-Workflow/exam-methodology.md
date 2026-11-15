@@ -21,6 +21,41 @@ The official guide describes **23 hours 45 minutes** of exam time and an additio
 - [ ] Practice confirming Kali VPN IP, network routes and host reachability.
 - [ ] Know where your notes and offline manuals are. Do **not** use LLM/chatbot assistance during the exam.
 
+
+### Pre-exam rehearsal — verify the cheat sheet before relying on it
+
+Do this in your own practice environment, **before** the exam. The repository is a command reference, not proof that the commands work on your particular Kali build.
+
+~~~bash
+umask 077
+mkdir -p "$HOME/oscp-local"/{scans,notes,evidence,reports,transfer}
+for tool in nmap curl wget python3 ssh scp smbclient dig ffuf gobuster hashcat john; do
+  command -v "$tool" || printf 'MISSING: %s\n' "$tool"
+done
+ls -l /usr/share/wordlists/rockyou.txt* /usr/share/wordlists/dirb/common.txt
+ls -l /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt
+~~~
+
+Install and test missing utilities from trusted sources before the exam. Check installed command versions, wordlist paths, architecture and tool-specific help. Also prepare any approved Windows enumeration utilities, a compatible remote desktop client, and matching pivot binaries when needed. Review the current official restrictions; a tool name is not approval of every feature.
+
+Practice the following workflows using your own authorized lab, with a fresh terminal each time:
+
+| Rehearsal | Success condition |
+| --- | --- |
+| Port discovery | Full TCP range completed; discovered-port extraction returns correct list; UDP coverage recorded |
+| HTTP transfer | Kali serves a harmless test file; Linux and Windows clients download it and checksums match |
+| Credentialed access | Assigned test account signs in through the correct service; identity verified |
+| Windows ACL and PuTTY | Locate a test session and interpret configuration versus an actual privileged consumer |
+| Linux escalation enumeration | Identify test sudo, file capability or scheduled-task configuration and its actual execution context |
+| Offline password audit | Public synthetic Hashcat example recovers the expected sample password; mode errors understood |
+| AD enumeration | Find assigned domain/DC, verify DNS and time, inspect authorized account and SPNs |
+| Pivot | Reach one known lab service through SSH or a prepared tunnel; verify route and clean up |
+| Evidence and report | Produce a local sample PDF and unencrypted 7z; confirm screenshots and readable reproduction steps |
+
+See [File Transfer](../03-Initial-Access/file-transfer.md), [Password Auditing](../06-Passwords/password-auditing.md), and [Pivoting](../07-Pivoting/pivoting-tunneling.md) for the relevant command sheets.
+
+Keep a local copy of these static notes available before the exam. Do not store exam machine data in the public checkout, seek assistance from others, or prompt AI/chatbots during the exam or report phase. Refer to [OffSec AI policy](https://help.offsec.com/hc/en-us/articles/35549468971156-AI-Usage-Policy-in-OffSec-Exams).
+
 ## 3. Initial connectivity and logging
 
 ~~~bash
