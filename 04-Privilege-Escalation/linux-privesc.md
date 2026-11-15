@@ -11,6 +11,138 @@
 5. Verify the exact precondition of a candidate before attempting it.
 6. Record the original finding, commands, outcome and current privilege level.
 
+## Beginner command lab — understand Linux permissions before escalation practice
+
+This section is for your own Linux/Kali preparation machine. It uses only temporary files you own, no sudo, no privileged executables and no target connections. The examples are not an escalation technique. Practice the actual privilege-escalation objectives separately in the assigned PEN-200 course labs.
+
+### A. Read your identity correctly
+
+~~~bash
+whoami
+id
+id -u
+id -ru
+id -g
+groups
+umask
+~~~
+
+Illustrative output (the account and group IDs will vary):
+
+~~~text
+student
+uid=1000(student) gid=1000(student) groups=1000(student),27(sudo)
+1000
+1000
+1000
+student sudo
+0022
+~~~
+
+- whoami and id -u describe the effective identity. id -ru is the real UID.
+- UID 0 is root in the current user namespace; root inside a container or user namespace is not necessarily root on the host.
+- Group membership is not the same as permission to run every command. A sudo group listing alone does not establish actual sudo policy.
+- umask describes default permission restrictions for newly created files, not the mode of existing files.
+- A prompt ending in # or $ is not reliable evidence of privilege.
+
+### B. Read mode bits without memorizing them
+
+| Bit | Numeric value | Meaning on a regular file | Meaning on a directory |
+| --- | --- | --- | --- |
+| r | 4 | Read contents | List entry names |
+| w | 2 | Modify contents | Create/remove entries when traversal is also allowed and other restrictions permit |
+| x | 1 | Execute if otherwise permitted | Traverse / search entries |
+
+Permissions are evaluated for owner, group and other, subject to effective credentials, ACLs, mount options and security policy.
+
+| Mode | Typical display | Meaning |
+| --- | --- | --- |
+| 600 | -rw------- | Owner read/write |
+| 640 | -rw-r----- | Owner read/write; group read |
+| 644 | -rw-r--r-- | Owner read/write; everyone else read |
+| 700 | -rwx------ | Owner read/write/execute |
+| 755 | -rwxr-xr-x | Owner all; group/other read/execute |
+| 1777 | drwxrwxrwt | Shared directory with sticky bit, e.g. typical /tmp |
+
+Special bits: setuid = 4000, setgid = 2000, sticky = 1000. A visible special bit does not by itself establish that the operating system honors it for a particular file or that its behavior is unsafe. Never set these bits on practice executables merely to demonstrate the notation.
+
+### C. Hands-on local drill: inspect, change and verify
+
+Run in one Bash terminal on your own Linux machine:
+
+~~~bash
+LAB=$(mktemp -d)
+printf 'synthetic note\n' > "$LAB/note.txt"
+
+chmod 600 "$LAB/note.txt"
+stat -c 'mode=%a type=%F' "$LAB/note.txt"
+
+chmod 640 "$LAB/note.txt"
+stat -c 'mode=%a type=%F' "$LAB/note.txt"
+
+printf '#!/bin/sh\nprintf "local demo\\n"\n' > "$LAB/run.sh"
+chmod 600 "$LAB/run.sh"
+if test -x "$LAB/run.sh"; then echo 'executable: yes'; else echo 'executable: no'; fi
+
+chmod 700 "$LAB/run.sh"
+if test -x "$LAB/run.sh"; then echo 'executable: yes'; else echo 'executable: no'; fi
+"$LAB/run.sh"
+
+namei -l "$LAB/note.txt"
+find "$LAB" -maxdepth 1 -type f -printf '%f %m\n' | sort
+~~~
+
+Expected output from the deterministic checks (GNU/Linux):
+
+~~~text
+mode=600 type=regular file
+mode=640 type=regular file
+executable: no
+executable: yes
+local demo
+note.txt 640
+run.sh 700
+~~~
+
+The namei output also lists each parent directory; names and owners vary. Your temporary directory normally has mode 0700. Notice that a group-readable file inside that directory is not necessarily reachable by group members.
+
+Cleanup:
+
+~~~bash
+rm -- "$LAB/note.txt" "$LAB/run.sh"
+rmdir -- "$LAB"
+~~~
+
+Verified 2026-11-15: the deterministic checks above ran successfully in a Linux container. The container ran as root; this validates syntax and displayed mode transitions, not cross-user permission enforcement, sudo policy or escalation on an exam target.
+
+### D. Understand path and policy errors
+
+| Symptom | Interpretation and safe check |
+| --- | --- |
+| File exists but access denied | Directory traversal permissions, identity, ACL or policy may differ from the file mode; namei -l on your own sample file shows its parents. |
+| File is executable but will not run | Check interpreter availability, architecture, file format and mount policy. |
+| A command prints Permission denied | Identify which operation failed; do not assume the problem is the same for reads, writes and execution. |
+| A command prints No such file or directory | Check path spelling, current directory, symlink destination or missing interpreter. |
+| getfacl not found | ACL tooling may not be installed. The absence of a tool does not establish the absence of ACLs. |
+| stat rejects -c | This is GNU stat syntax; BSD/macOS use different options. |
+| systemctl cannot connect to bus | The environment may not use systemd as PID 1, e.g. a container. |
+| sudo requests authentication | This is not proof that the account has unrestricted rights or no rights. Use only authorized credentials. |
+
+### E. Evidence and context reminders
+
+For a completed authorized exercise, record identity before and after, exact observed permission or configuration, action performed in the course lab, and outcome. Root in a container is not host root. A root-owned file, successful read, or an interesting process name is not proof of a privileged shell. Use the official proof requirements in [Exam Methodology](../08-Exam-Workflow/exam-methodology.md).
+
+Practice the following until you can explain each without looking it up:
+
+- [ ] Real versus effective UID.
+- [ ] Owner, group and other mode bits.
+- [ ] Directory traversal versus file readability.
+- [ ] Special bits versus actual effective permissions.
+- [ ] ACLs, namespaces and mount-policy concepts.
+- [ ] A suspected weakness versus a confirmed result.
+
+Continue with [hands-on terminal drills](../09-Lab-Writeups/hands-on-terminal-drills.md) and the [beginner desk reference](../00-Quick-Reference/beginner-desk-reference.md).
+
 ## 1. Establish context
 
 ~~~bash
