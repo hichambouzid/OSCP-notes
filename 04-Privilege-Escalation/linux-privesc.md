@@ -288,6 +288,7 @@ ls -la /etc/profile.d /etc/sudoers.d /etc/apt/apt.conf.d 2>/dev/null
 | --- | --- |
 | Dirty COW (CVE-2016-5195) | Kernel package, distro patch/backport status, architecture |
 | Dirty Pipe (CVE-2022-0847) | Affected kernel version and distribution fixes |
+| Copy Fail (CVE-2026-31431) | Running kernel, AF_ALG/algif_aead availability, vendor patch status; see section 9.10.1 |
 | Baron Samedit (CVE-2021-3156) | Exact sudo package and vendor advisory |
 | PwnKit (CVE-2021-4034) | Exact polkit package, pkexec installation and vendor fixes |
 | OverlayFS / namespace issues | Specific CVE, distro build, namespace configuration and required filesystem |
@@ -301,6 +302,60 @@ sysctl kernel.unprivileged_userns_clone user.max_user_namespaces 2>/dev/null
 ~~~
 
 These are research leads, not universal exploits. Verify exact CVE prerequisites, review source, match architecture and libc, and use a disposable snapshot for crash-prone practice. Prefer configuration-based escalation over risky kernel exploitation. References: [Ubuntu CVEs](https://ubuntu.com/security/cves), [Debian security tracker](https://security-tracker.debian.org/tracker/), [Red Hat security](https://access.redhat.com/security/).
+
+### 9.10.1 Copy Fail (CVE-2026-31431) — Linux local privilege escalation
+
+Disclosed April 29, 2026 by Theori / Xint Code. CVSS 3.1: 7.8 (High). An error in the kernel's algif_aead implementation of the AF_ALG userspace crypto interface permits a local unprivileged user to modify cached file data; a published proof of concept targets a setuid binary and can yield root on affected systems. The modification is in the page cache, not an ordinary on-disk file write. This is a local post-foothold vulnerability, not remote code execution.
+
+**Prerequisites and enumeration**
+
+- A shell or local code execution on an explicitly authorized vulnerable Linux host.
+- An affected, unpatched running kernel with the relevant crypto interface accessible. Distribution backports and mitigation policies matter; kernel version alone is insufficient.
+- Python 3.10+ for the original Python PoC; standard library only.
+- A disposable VM with a snapshot, not a production server or a container on a shared host. Containers share the host kernel and can have additional restrictions or cross-container effects.
+
+~~~bash
+id
+uname -r
+cat /etc/os-release
+python3 --version
+grep -E '^CONFIG_CRYPTO_USER_API_AEAD=' "/boot/config-$(uname -r)" 2>/dev/null
+grep '^algif_aead ' /proc/modules
+modinfo algif_aead 2>/dev/null
+ls -l /usr/bin/su
+findmnt -T /usr/bin/su -o TARGET,OPTIONS
+~~~
+
+An absent module listing does not establish safety: it may be built into the kernel, available for autoload, disabled by policy, or unavailable. On Ubuntu, compare the exact running kernel package and flavour against the vendor security tracker; on Debian/RHEL use the corresponding vendor advisory. An installed fixed kernel is not necessarily the currently booted kernel.
+
+**Original PoC and script**
+
+- [Original Theori source](https://github.com/theori-io/copy-fail-CVE-2026-31431/blob/main/copy_fail_exp.py)
+- [Local Python retrieval helper](vulnerabilities/copy_fail.py) — retrieves the published 732-byte script, verifies its SHA-256 against the researcher's disclosure, refuses to overwrite a file, and never executes it.
+- Original SHA-256: a567d09b15f6e4440e70c9f2aa8edec8ed59f53301952df05c719aa3911687f9.
+
+From the repository root on your preparation workstation:
+
+~~~bash
+python3 04-Privilege-Escalation/vulnerabilities/copy_fail.py --output copy_fail_exp.py
+sha256sum copy_fail_exp.py
+less copy_fail_exp.py
+~~~
+
+Review the original source, then use the verified script only in your disposable, assigned practice VM. The upstream demonstration targets /usr/bin/su by default; after manually running the PoC, invoking su is the researcher's documented way to enter the resulting shell. Check id before and after; successful Python execution alone does not prove root. Restore the VM snapshot after the exercise, since the PoC alters the cached privileged executable. Do not use the script on a production machine, shared container host or any target outside your explicit authorization. Do not assume an old build is vulnerable or disable security controls to make it work.
+
+**Patch and mitigation**
+
+Update the distribution kernel to a fixed package and reboot into that kernel. The upstream fix is commit a664bf3d603d; vendors may backport it with different package versions. Blocking the affected AF_ALG feature or disabling the algif_aead module where supported can be a temporary vendor-approved mitigation, but may affect applications. Do not use a missing module listing or on-disk file integrity alone to establish that a host is patched or uncompromised.
+
+**References**
+
+- [Researcher disclosure and original PoC hash](https://copy.fail/)
+- [CERT/CC VU#260001](https://kb.cert.org/vuls/id/260001)
+- [Ubuntu CVE tracker](https://ubuntu.com/security/CVE-2026-31431)
+- [Debian CVE tracker](https://security-tracker.debian.org/tracker/CVE-2026-31431)
+- [Red Hat advisory](https://access.redhat.com/security/vulnerabilities/RHSB-2026-002)
+- [OffSec OSCP+ exam guide](https://help.offsec.com/hc/en-us/articles/360040165632-OSCP-Exam-Guide) — check current restrictions before using any exploit in an exam; AI assistance is not permitted during the exam.
 
 ### 9.11 Enumeration helpers and evidence
 
